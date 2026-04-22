@@ -1,0 +1,7 @@
+node_modules/
+dist/
+unpackage/
+.hbuilderx/
+.vscode/
+.idea/
+.DS_Store

@@ -1,0 +1,62 @@
+﻿{
+  "pages": [
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "登录/注册"
+      }
+    },
+    {
+      "path": "pages/home/home",
+      "style": {
+        "navigationBarTitleText": "每日打卡"
+      }
+    },
+    {
+      "path": "pages/task-pool/task-pool",
+      "style": {
+        "navigationBarTitleText": "任务池管理"
+      }
+    },
+    {
+      "path": "pages/checkin-detail/checkin-detail",
+      "style": {
+        "navigationBarTitleText": "打卡详情"
+      }
+    },
+    {
+      "path": "pages/setting/setting",
+      "style": {
+        "navigationBarTitleText": "我的"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "日迹打卡",
+    "navigationBarBackgroundColor": "#e8faf4",
+    "backgroundColor": "#eefcf8",
+    "backgroundTextStyle": "light"
+  },
+  "tabBar": {
+    "color": "#8A8F99",
+    "selectedColor": "#2F7BFF",
+    "backgroundColor": "#eefcf8",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "每日打卡"
+      },
+      {
+        "pagePath": "pages/task-pool/task-pool",
+        "text": "任务池"
+      },
+      {
+        "pagePath": "pages/setting/setting",
+        "text": "我的"
+      }
+    ]
+  },
+  "uniIdRouter": {}
+}
