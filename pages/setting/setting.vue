@@ -56,7 +56,7 @@
           <text class="row-value">{{ cacheSizeText }}</text>
         </view>
         <view class="actions">
-          <button class="action-btn" @click="refreshCacheSize">刷新大小</button>
+          <button class="action-btn" @click="handleRefreshCacheSize">刷新大小</button>
           <button class="action-btn warn" :disabled="cleaning" @click="cleanUnusedMedia">清理未引用媒体</button>
         </view>
       </view>
@@ -331,9 +331,20 @@ export default {
         return Promise.resolve([])
       }
     },
-    async refreshCacheSize() {
+    async refreshCacheSize(showFeedback = false) {
       const files = await this.listMediaFiles()
       this.cacheSizeBytes = files.reduce((sum, file) => sum + Number(file.size || 0), 0)
+      if (showFeedback) {
+        this.showToast(`当前缓存 ${this.cacheSizeText}`, 'none')
+      }
+    },
+    async handleRefreshCacheSize() {
+      uni.showLoading({ title: '刷新中...' })
+      try {
+        await this.refreshCacheSize(true)
+      } finally {
+        uni.hideLoading()
+      }
     },
     async cleanUnusedMedia() {
       if (this.cleaning) {

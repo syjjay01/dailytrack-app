@@ -1,4 +1,4 @@
-﻿{
+{
     "name" : "日迹打卡",
     "appid" : "__UNI__A6A9E52",
     "description" : "轻量级、隐私优先的个人任务与习惯记录工具",
@@ -16,7 +16,8 @@
             "delay" : 0
         },
         "modules" : {
-            "VideoPlayer" : {}
+            "VideoPlayer" : {},
+            "Camera" : {}
         },
         "distribute" : {
             "android" : {
