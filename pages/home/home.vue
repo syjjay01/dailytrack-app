@@ -2,9 +2,12 @@
   <view class="home-page">
     <view class="date-bar">
       <text class="arrow" @click="goPrevDay">‹</text>
-      <view class="date-center">
-        <text class="date-text">{{ displayDateText }}</text>
-      </view>
+      <picker mode="date" :value="currentDate" @change="onDatePick" class="date-picker">
+        <view class="date-center">
+          <text class="date-text">{{ displayDateText }}</text>
+        </view>
+      </picker>
+      <text v-if="!isCurrentDateToday" class="today-btn" @click="backToToday">今日</text>
       <text class="arrow" @click="goNextDay">›</text>
     </view>
 
@@ -45,7 +48,13 @@
     </scroll-view>
 
     <view class="bottom-bar">
-      <button class="bottom-btn secondary" @click="syncToTomorrow">同步到明天</button>
+      <button
+        class="bottom-btn secondary"
+        :disabled="!isCurrentDateToday"
+        @click="syncToTomorrow"
+      >
+        同步任务到明天
+      </button>
       <button class="bottom-btn primary" @click="openManageMenu">管理任务</button>
     </view>
 
@@ -72,17 +81,21 @@
 
         <scroll-view class="sheet-list" scroll-y>
           <view v-if="availablePoolTasks.length === 0" class="sheet-empty">任务池中暂无可添加任务</view>
-          <view
-            v-for="poolTask in availablePoolTasks"
-            :key="poolTask.id"
-            class="sheet-item"
-            @click="addTaskFromPool(poolTask)"
-          >
-            <text class="sheet-name">{{ poolTask.name }}</text>
-            <text class="add-one">添加</text>
-          </view>
+          <checkbox-group @change="onPoolSelectChange">
+            <label
+              v-for="poolTask in availablePoolTasks"
+              :key="poolTask.id"
+              class="sheet-item selectable"
+            >
+              <text class="sheet-name">{{ poolTask.name }}</text>
+              <checkbox :value="String(poolTask.id)" :checked="poolSelectedIds.includes(String(poolTask.id))" color="#2fa184" />
+            </label>
+          </checkbox-group>
         </scroll-view>
 
+        <button class="sheet-add" :disabled="poolSelectedIds.length === 0" @click="addSelectedFromPool">
+          添加选中（{{ poolSelectedIds.length }}）
+        </button>
         <button class="sheet-close" @click="poolPickerVisible = false">关闭</button>
       </view>
     </view>
@@ -103,7 +116,8 @@ export default {
       dailyTasks: [],
       editPanelVisible: false,
       poolPickerVisible: false,
-      availablePoolTasks: []
+      availablePoolTasks: [],
+      poolSelectedIds: []
     }
   },
   computed: {
@@ -111,6 +125,9 @@ export default {
       const dateText = formatDate(this.currentDate, 'YYYY年MM月DD日')
       const weekday = getWeekday(this.currentDate).replace('周', '星期')
       return `${dateText} ${weekday}`
+    },
+    isCurrentDateToday() {
+      return this.currentDate === getToday()
     }
   },
   onShow() {
@@ -224,6 +241,18 @@ export default {
       this.currentDate = getPrevDay(this.currentDate)
       this.loadDailyTasks(this.currentDate)
     },
+    onDatePick(e) {
+      const value = e && e.detail && e.detail.value ? e.detail.value : ''
+      if (!value) {
+        return
+      }
+      this.currentDate = value
+      this.loadDailyTasks(this.currentDate)
+    },
+    backToToday() {
+      this.currentDate = getToday()
+      this.loadDailyTasks(this.currentDate)
+    },
     goNextDay() {
       this.currentDate = getNextDay(this.currentDate)
       this.loadDailyTasks(this.currentDate)
@@ -264,36 +293,19 @@ export default {
       })
     },
     syncToTomorrow() {
+      if (!this.isCurrentDateToday) {
+        this.showToast('仅支持在今天同步任务到明天')
+        return
+      }
       if (this.dailyTasks.length === 0) {
         this.showToast('今天暂无任务可同步')
         return
       }
 
       const tomorrow = getNextDay(this.currentDate)
-      const tomorrowKey = this.getDailyStorageKey(tomorrow)
-      const tomorrowValue = getItem(tomorrowKey)
       const nextTasks = this.dailyTasks.map((item, index) => this.sanitizeForTomorrow(item, index))
-
-      const doSync = () => {
-        setDailyRecord(tomorrow, nextTasks)
-        this.showToast('已同步到明天', 'success')
-      }
-
-      if (Array.isArray(tomorrowValue) && tomorrowValue.length > 0) {
-        uni.showModal({
-          title: '覆盖确认',
-          content: '明天已有任务数据，是否覆盖？',
-          confirmText: '覆盖',
-          success: (res) => {
-            if (res.confirm) {
-              doSync()
-            }
-          }
-        })
-        return
-      }
-
-      doSync()
+      setDailyRecord(tomorrow, nextTasks)
+      this.showToast('已同步任务到明天', 'success')
     },
     openManageMenu() {
       uni.showActionSheet({
@@ -308,13 +320,7 @@ export default {
       })
     },
     openPoolPicker() {
-      const pool = getTaskPool().slice().sort((a, b) => {
-        const sa = Number(a && a.sortOrder ? a.sortOrder : 0)
-        const sb = Number(b && b.sortOrder ? b.sortOrder : 0)
-        return sa - sb
-      })
-      const existingIds = new Set(this.dailyTasks.map((item) => item.id))
-      this.availablePoolTasks = pool.filter((item) => !existingIds.has(item.id))
+      this.availablePoolTasks = this.getAvailablePoolTasks()
 
       if (this.availablePoolTasks.length === 0) {
         this.showToast('没有可添加的任务')
@@ -322,17 +328,47 @@ export default {
       }
 
       this.editPanelVisible = false
+      this.poolSelectedIds = []
       this.poolPickerVisible = true
     },
-    addTaskFromPool(poolTask) {
-      const next = this.sanitizeForDailyFromPool(poolTask, this.dailyTasks.length)
-      this.dailyTasks = [...this.dailyTasks, next].map((item, index) => ({
+    onPoolSelectChange(e) {
+      const values = (e && e.detail && e.detail.value) || []
+      this.poolSelectedIds = values
+    },
+    getAvailablePoolTasks() {
+      const pool = getTaskPool().slice().sort((a, b) => {
+        const sa = Number(a && a.sortOrder ? a.sortOrder : 0)
+        const sb = Number(b && b.sortOrder ? b.sortOrder : 0)
+        return sa - sb
+      })
+      const existingIds = new Set(this.dailyTasks.map((item) => String(item.id)))
+      return pool.filter((item) => !existingIds.has(String(item.id)))
+    },
+    addSelectedFromPool() {
+      if (this.poolSelectedIds.length === 0) {
+        this.showToast('请先选择任务')
+        return
+      }
+
+      const selectedSet = new Set(this.poolSelectedIds.map((id) => String(id)))
+      const toAdd = this.availablePoolTasks.filter((task) => selectedSet.has(String(task.id)))
+      if (toAdd.length === 0) {
+        this.showToast('没有可添加任务')
+        return
+      }
+
+      const appended = toAdd.map((task, index) => this.sanitizeForDailyFromPool(task, this.dailyTasks.length + index))
+      this.dailyTasks = [...this.dailyTasks, ...appended].map((item, index) => ({
         ...item,
         sortOrder: index + 1
       }))
       this.saveCurrentDateTasks()
-      this.poolPickerVisible = false
-      this.showToast('已添加任务', 'success')
+      this.showToast(`已添加${toAdd.length}个任务`, 'success')
+      this.availablePoolTasks = this.getAvailablePoolTasks()
+      this.poolSelectedIds = []
+      if (this.availablePoolTasks.length === 0) {
+        this.poolPickerVisible = false
+      }
     },
     deleteTodayTask(task) {
       uni.showModal({
@@ -406,10 +442,25 @@ export default {
   text-align: center;
 }
 
+.date-picker {
+  flex: 1;
+}
+
 .date-text {
   font-size: 30rpx;
   font-weight: 600;
   color: var(--mint-title);
+}
+
+.today-btn {
+  margin-right: 10rpx;
+  padding: 0 14rpx;
+  height: 50rpx;
+  line-height: 50rpx;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  color: var(--mint-primary-2);
+  background: #e9f9f3;
 }
 
 .task-list {
@@ -553,6 +604,10 @@ export default {
   border: 2rpx solid var(--mint-border);
 }
 
+.bottom-btn.secondary[disabled] {
+  opacity: 0.5;
+}
+
 .bottom-btn.primary {
   background: linear-gradient(120deg, var(--mint-primary) 0%, var(--mint-primary-2) 100%);
   color: #ffffff;
@@ -609,6 +664,10 @@ export default {
   justify-content: space-between;
 }
 
+.sheet-item.selectable {
+  height: 92rpx;
+}
+
 .sheet-name {
   font-size: 28rpx;
   color: var(--mint-title);
@@ -661,7 +720,8 @@ export default {
   }
 
   .arrow,
-  .status-btn {
+  .status-btn,
+  .today-btn {
     background: #1e443b;
   }
 

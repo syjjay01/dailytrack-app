@@ -39,22 +39,28 @@
     "backgroundTextStyle": "light"
   },
   "tabBar": {
-    "color": "#8A8F99",
-    "selectedColor": "#2F7BFF",
-    "backgroundColor": "#eefcf8",
-    "borderStyle": "black",
+    "color": "#7F8792",
+    "selectedColor": "#2FA184",
+    "backgroundColor": "#F7FFFC",
+    "borderStyle": "white",
     "list": [
       {
         "pagePath": "pages/home/home",
-        "text": "每日打卡"
+        "text": "每日打卡",
+        "iconPath": "static/tab/home.png",
+        "selectedIconPath": "static/tab/home-active.png"
       },
       {
         "pagePath": "pages/task-pool/task-pool",
-        "text": "任务池"
+        "text": "任务池",
+        "iconPath": "static/tab/task.png",
+        "selectedIconPath": "static/tab/task-active.png"
       },
       {
         "pagePath": "pages/setting/setting",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "static/tab/me.png",
+        "selectedIconPath": "static/tab/me-active.png"
       }
     ]
   },

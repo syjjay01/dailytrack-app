@@ -203,7 +203,7 @@ export default {
 <style scoped>
 .login-page {
   min-height: 100vh;
-  padding: 80rpx 40rpx;
+  padding: 70rpx 28rpx;
   box-sizing: border-box;
   background: var(--mint-bg);
   position: relative;
@@ -253,6 +253,7 @@ export default {
   background: var(--mint-panel-bg);
   box-shadow: var(--mint-shadow);
   border: 2rpx solid var(--mint-border);
+  box-sizing: border-box;
 }
 
 .brand {
@@ -317,6 +318,7 @@ export default {
 }
 
 .field-input {
+  width: 100%;
   height: 86rpx;
   border-radius: 20rpx;
   border: 2rpx solid var(--mint-border);
@@ -363,6 +365,12 @@ export default {
 
   .bg-2 {
     background: rgba(69, 167, 141, 0.2);
+  }
+}
+
+@media screen and (max-width: 380px) {
+  .panel {
+    padding: 42rpx 24rpx;
   }
 }
 </style>

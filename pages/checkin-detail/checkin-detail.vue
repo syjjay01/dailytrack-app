@@ -299,8 +299,18 @@ export default {
       if (!this.video.path) {
         return
       }
-      await this.clearVideo(true)
-      this.showToast('视频已删除', 'success')
+      uni.showModal({
+        title: '删除视频',
+        content: '确定删除当前视频吗？',
+        confirmText: '删除',
+        success: async (res) => {
+          if (!res.confirm) {
+            return
+          }
+          await this.clearVideo(true)
+          this.showToast('视频已删除', 'success')
+        }
+      })
     },
     moveImage(index, offset) {
       const toIndex = index + offset
@@ -341,6 +351,7 @@ export default {
         const oldTask = dailyList[idx]
         dailyList[idx] = {
           ...oldTask,
+          status: 'completed',
           checkinText: text,
           images: this.images.slice(),
           video: this.video.path,
