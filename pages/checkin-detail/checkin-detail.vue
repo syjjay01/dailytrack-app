@@ -34,7 +34,8 @@
 
         <view v-if="images.length > 0" class="media-list">
           <view v-for="(img, index) in images" :key="img" class="image-item">
-            <image :src="img" class="thumb" mode="aspectFill" />
+            <image :src="img" class="thumb" mode="aspectFill" @click.stop="previewImage(index)" />
+            <text class="save-icon" @click.stop="saveImage(index)">↓</text>
             <text class="delete-icon" @click="removeImage(index)">✕</text>
             <view class="sort-controls">
               <text class="sort-btn" :class="{ disabled: index === 0 }" @click="moveImage(index, -1)">←</text>
@@ -44,7 +45,22 @@
         </view>
 
         <view v-if="video.path" class="video-wrap">
-          <video :src="video.path" class="video-player" :controls="false" objectFit="cover"></video>
+          <video
+            id="checkinVideoPlayer"
+            :src="video.path"
+            class="video-player"
+            :controls="true"
+            objectFit="cover"
+            @tap.stop="openVideoFullscreen"
+            @ended="onVideoEnded"
+            @play="onVideoPlay"
+          ></video>
+          <view class="video-actions">
+            <button class="video-action-btn" @click="playVideo">播放</button>
+            <button class="video-action-btn" @click="replayVideo">重放</button>
+            <button class="video-action-btn" @click="openVideoFullscreen">全屏</button>
+            <button class="video-action-btn" @click="saveVideo">保存</button>
+          </view>
           <view class="video-info">
             <text>视频时长：{{ formatDuration(video.duration) }}</text>
             <text class="delete-video" @click="removeVideo">删除视频</text>
@@ -77,6 +93,7 @@ export default {
         path: '',
         duration: 0
       },
+      videoEnded: false,
       mediaType: '',
       saving: false,
       activeThemeVars: getThemeVars('mint'),
@@ -172,6 +189,7 @@ export default {
     async clearVideo(deleteLocal = true) {
       const path = this.video.path
       this.video = { path: '', duration: 0 }
+      this.videoEnded = false
       this.mediaType = this.images.length ? 'image' : ''
       if (deleteLocal && path) {
         await deleteMediaFile(path)
@@ -279,6 +297,7 @@ export default {
               path: savedPath,
               duration: Number(res.duration || 0)
             }
+            this.videoEnded = false
             this.mediaType = 'video'
             this.showToast('视频已添加', 'success')
           } catch (error) {
@@ -328,11 +347,122 @@ export default {
       list[toIndex] = temp
       this.images = list
     },
+    previewImage(index) {
+      if (!Array.isArray(this.images) || this.images.length === 0) {
+        return
+      }
+      uni.previewImage({
+        current: this.images[index] || this.images[0],
+        urls: this.images.slice()
+      })
+    },
+    saveImage(index) {
+      const path = this.images[index]
+      if (!path) {
+        this.showToast('图片不存在')
+        return
+      }
+      uni.showLoading({ title: '保存中...' })
+      uni.saveImageToPhotosAlbum({
+        filePath: path,
+        success: () => {
+          this.showToast('图片已保存到相册', 'success')
+        },
+        fail: (err) => {
+          this.handleAlbumSaveFail(err, '图片')
+        },
+        complete: () => {
+          uni.hideLoading()
+        }
+      })
+    },
     formatDuration(duration) {
       const total = Number(duration || 0)
       const m = Math.floor(total / 60)
       const s = Math.floor(total % 60)
       return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+    },
+    getVideoContext() {
+      return uni.createVideoContext('checkinVideoPlayer', this)
+    },
+    playVideo() {
+      if (!this.video.path) {
+        return
+      }
+      const ctx = this.getVideoContext()
+      if (ctx && typeof ctx.play === 'function') {
+        ctx.play()
+      }
+    },
+    replayVideo() {
+      if (!this.video.path) {
+        return
+      }
+      const ctx = this.getVideoContext()
+      if (ctx && typeof ctx.seek === 'function') {
+        ctx.seek(0)
+      }
+      if (ctx && typeof ctx.play === 'function') {
+        ctx.play()
+      }
+      this.videoEnded = false
+    },
+    openVideoFullscreen() {
+      if (!this.video.path) {
+        return
+      }
+      const ctx = this.getVideoContext()
+      if (ctx && typeof ctx.requestFullScreen === 'function') {
+        ctx.requestFullScreen({
+          direction: 0
+        })
+      }
+    },
+    onVideoEnded() {
+      this.videoEnded = true
+    },
+    onVideoPlay() {
+      this.videoEnded = false
+    },
+    saveVideo() {
+      if (!this.video.path) {
+        this.showToast('视频不存在')
+        return
+      }
+      uni.showLoading({ title: '保存中...' })
+      uni.saveVideoToPhotosAlbum({
+        filePath: this.video.path,
+        success: () => {
+          this.showToast('视频已保存到相册', 'success')
+        },
+        fail: (err) => {
+          this.handleAlbumSaveFail(err, '视频')
+        },
+        complete: () => {
+          uni.hideLoading()
+        }
+      })
+    },
+    handleAlbumSaveFail(error, mediaType) {
+      const errMsg = (error && error.errMsg) || ''
+      const denied = errMsg.includes('auth deny') || errMsg.includes('authorize no response') || errMsg.includes('permission')
+      if (!denied) {
+        this.showToast(`${mediaType}保存失败`)
+        return
+      }
+      uni.showModal({
+        title: '需要相册权限',
+        content: `保存${mediaType}到系统相册需要授权，是否前往设置开启？`,
+        confirmText: '去设置',
+        success: (res) => {
+          if (!res.confirm) {
+            return
+          }
+          if (typeof uni.openSetting === 'function') {
+            uni.openSetting({})
+          }
+        }
+      })
     },
     async handleSave() {
       const text = String(this.checkinText || '').trim()
@@ -525,6 +655,20 @@ export default {
   background: var(--mint-danger);
 }
 
+.save-icon {
+  position: absolute;
+  top: -14rpx;
+  left: -14rpx;
+  width: 36rpx;
+  height: 36rpx;
+  line-height: 36rpx;
+  text-align: center;
+  border-radius: 50%;
+  font-size: 22rpx;
+  color: #ffffff;
+  background: var(--mint-primary);
+}
+
 .sort-controls {
   margin-top: 8rpx;
   display: flex;
@@ -556,6 +700,28 @@ export default {
   height: 360rpx;
   border-radius: 16rpx;
   border: 2rpx solid var(--mint-border);
+}
+
+.video-actions {
+  margin-top: 12rpx;
+  display: flex;
+  gap: 10rpx;
+}
+
+.video-action-btn {
+  flex: 1;
+  height: 64rpx;
+  line-height: 64rpx;
+  margin: 0;
+  border-radius: 12rpx;
+  font-size: calc(24rpx * var(--font-scale));
+  color: var(--mint-primary-2);
+  background: #e9faf4;
+  border: 2rpx solid var(--mint-border);
+}
+
+.video-action-btn::after {
+  border: none;
 }
 
 .video-info {
