@@ -1,5 +1,5 @@
 ﻿<template>
-  <view class="detail-page">
+  <view class="detail-page" :style="pageStyleVars">
     <scroll-view class="content" scroll-y>
       <view class="header-card">
         <text class="task-name">{{ taskName }}</text>
@@ -23,12 +23,8 @@
         <text class="section-title">媒体上传（二选一）</text>
 
         <view class="upload-actions">
-          <button class="upload-btn" :disabled="videoExists" @click="chooseImageFlow">
-            上传图片 ({{ images.length }}/3)
-          </button>
-          <button class="upload-btn" :disabled="imageExists" @click="chooseVideoFlow">
-            上传视频
-          </button>
+          <button class="upload-btn" :disabled="videoExists" @click="chooseImageFlow">上传图片 ({{ images.length }}/3)</button>
+          <button class="upload-btn" :disabled="imageExists" @click="chooseVideoFlow">上传视频</button>
         </view>
 
         <text v-if="videoExists" class="hint">当前已有视频，如需上传图片请先删除视频</text>
@@ -42,13 +38,7 @@
             <text class="delete-icon" @click="removeImage(index)">✕</text>
             <view class="sort-controls">
               <text class="sort-btn" :class="{ disabled: index === 0 }" @click="moveImage(index, -1)">←</text>
-              <text
-                class="sort-btn"
-                :class="{ disabled: index === images.length - 1 }"
-                @click="moveImage(index, 1)"
-              >
-                →
-              </text>
+              <text class="sort-btn" :class="{ disabled: index === images.length - 1 }" @click="moveImage(index, 1)">→</text>
             </view>
           </view>
         </view>
@@ -72,11 +62,8 @@
 <script>
 import { getDailyRecord, setDailyRecord } from '@/utils/storage.js'
 import { formatDate, getWeekday } from '@/utils/dateHelper.js'
-import {
-  compressAndSaveImage,
-  validateAndSaveVideo,
-  deleteMediaFile
-} from '@/utils/mediaHelper.js'
+import { compressAndSaveImage, validateAndSaveVideo, deleteMediaFile } from '@/utils/mediaHelper.js'
+import { getThemeVars, getFontConfig, applyNavigationBarTheme } from '@/utils/theme.js'
 
 export default {
   data() {
@@ -91,7 +78,9 @@ export default {
         duration: 0
       },
       mediaType: '',
-      saving: false
+      saving: false,
+      activeThemeVars: getThemeVars('mint'),
+      activeFontConfig: getFontConfig('normal')
     }
   },
   computed: {
@@ -110,6 +99,13 @@ export default {
     },
     videoExists() {
       return !!this.video.path
+    },
+    pageStyleVars() {
+      return {
+        ...this.activeThemeVars,
+        '--page-font-size': this.activeFontConfig.varSize,
+        '--font-scale': String(this.activeFontConfig.scale)
+      }
     }
   },
   onLoad(options) {
@@ -117,7 +113,18 @@ export default {
     this.taskId = options.taskId || ''
     this.loadTaskDetail()
   },
+  onShow() {
+    this.loadAppAppearance()
+  },
   methods: {
+    loadAppAppearance() {
+      const app = getApp()
+      const globalData = (app && app.globalData) || {}
+      const activeTheme = globalData.activeTheme || 'mint'
+      this.activeThemeVars = globalData.themeVars || getThemeVars(activeTheme)
+      this.activeFontConfig = globalData.fontConfig || getFontConfig((globalData.appSettings && globalData.appSettings.fontSize) || 'normal')
+      applyNavigationBarTheme(activeTheme)
+    },
     showToast(title, icon = 'none') {
       uni.showToast({ title, icon, duration: 1800 })
     },
@@ -176,9 +183,7 @@ export default {
           title: '切换媒体类型',
           content,
           confirmText: '清空并继续',
-          success: (res) => {
-            resolve(!!res.confirm)
-          },
+          success: (res) => resolve(!!res.confirm),
           fail: () => resolve(false)
         })
       })
@@ -375,18 +380,18 @@ export default {
 <style scoped>
 .detail-page {
   min-height: 100vh;
-  background: var(--mint-bg);
+  background: var(--bg-color);
   padding: 24rpx 24rpx 170rpx;
   box-sizing: border-box;
+  font-size: var(--page-font-size);
 
-  --mint-bg: #eefcf8;
-  --mint-card: #ffffff;
-  --mint-title: #16342f;
-  --mint-sub: #6c9489;
+  --mint-card: var(--card-bg-color);
+  --mint-title: var(--text-color);
+  --mint-sub: var(--text-secondary-color);
   --mint-border: #cdeee2;
   --mint-shadow: 0 10rpx 26rpx rgba(43, 132, 112, 0.12);
-  --mint-primary: #43c5a1;
-  --mint-primary-2: #2fa184;
+  --mint-primary: var(--primary-color);
+  --mint-primary-2: var(--primary-color);
   --mint-danger: #e86a70;
 }
 
@@ -406,7 +411,7 @@ export default {
 
 .task-name {
   display: block;
-  font-size: 36rpx;
+  font-size: calc(36rpx * var(--font-scale));
   font-weight: 700;
   color: var(--mint-title);
 }
@@ -414,7 +419,7 @@ export default {
 .date-text {
   display: block;
   margin-top: 8rpx;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-sub);
 }
 
@@ -425,21 +430,21 @@ export default {
 }
 
 .section-title {
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   color: var(--mint-title);
   font-weight: 600;
 }
 
 .section-tip,
 .hint {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-sub);
 }
 
 .switch-link {
   display: inline-block;
   margin-top: 8rpx;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-primary-2);
 }
 
@@ -451,7 +456,7 @@ export default {
   border-radius: 16rpx;
   box-sizing: border-box;
   padding: 18rpx;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale));
   color: var(--mint-title);
   background: #f8fffc;
 }
@@ -467,7 +472,7 @@ export default {
   height: 76rpx;
   line-height: 76rpx;
   border-radius: 14rpx;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale));
   margin: 0;
   color: var(--mint-primary-2);
   background: #e9faf4;
@@ -558,7 +563,7 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-sub);
 }
 
@@ -579,7 +584,7 @@ export default {
   border-radius: 999rpx;
   border: none;
   color: #ffffff;
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale));
   font-weight: 600;
   background: linear-gradient(120deg, var(--mint-primary) 0%, var(--mint-primary-2) 100%);
   box-shadow: 0 14rpx 28rpx rgba(47, 161, 132, 0.3);
@@ -591,24 +596,5 @@ export default {
 
 .save-btn[disabled] {
   opacity: 0.55;
-}
-
-@media (prefers-color-scheme: dark) {
-  .detail-page {
-    --mint-bg: #10241f;
-    --mint-card: #173730;
-    --mint-title: #def5ee;
-    --mint-sub: #92b9af;
-    --mint-border: #2b5950;
-    --mint-shadow: 0 10rpx 26rpx rgba(0, 0, 0, 0.36);
-    --mint-primary: #54d2ae;
-    --mint-primary-2: #3ca98d;
-  }
-
-  .text-input,
-  .upload-btn,
-  .sort-btn {
-    background: #1d433a;
-  }
 }
 </style>

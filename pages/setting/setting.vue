@@ -69,7 +69,7 @@
       <view class="group-card">
         <view class="row">
           <text class="row-label">版本号</text>
-          <text class="row-value">v{{ versionName }}</text>
+          <text class="row-value">V{{ versionName }}</text>
         </view>
       </view>
     </scroll-view>
@@ -86,7 +86,16 @@ import {
   TASK_POOL_KEY
 } from '@/utils/storage.js'
 import { deleteMediaFile, formatFileSize, getFileSize } from '@/utils/mediaHelper.js'
-import { setTheme, setFontSize, getThemeVars, getFontConfig } from '@/utils/theme.js'
+import {
+  setTheme,
+  setFontSize,
+  getThemeVars,
+  getFontConfig,
+  applyNavigationBarTheme,
+  applyTabBarTheme,
+  resolveThemeName,
+  getSystemTheme
+} from '@/utils/theme.js'
 
 const APP_SETTINGS_KEY = 'appSettings'
 const USERS_KEY = 'users'
@@ -174,9 +183,15 @@ export default {
       const app = getApp()
       app.globalData = app.globalData || {}
       app.globalData.appSettings = merged
+      const systemTheme = app.globalData.systemTheme || getSystemTheme()
+      const resolvedTheme = resolveThemeName(merged, systemTheme)
+      app.globalData.systemTheme = systemTheme
+      app.globalData.activeTheme = resolvedTheme
 
-      this.activeThemeVars = setTheme(merged.theme)
+      this.activeThemeVars = setTheme(resolvedTheme)
       this.activeFontConfig = setFontSize(merged.fontSize)
+      applyNavigationBarTheme(resolvedTheme)
+      applyTabBarTheme(resolvedTheme)
       app.globalData.themeVars = this.activeThemeVars
       app.globalData.fontConfig = this.activeFontConfig
 

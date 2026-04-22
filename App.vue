@@ -1,7 +1,14 @@
 ﻿<script>
 import { getItem, setItem, getDailyRecord, setDailyRecord } from '@/utils/storage.js'
 import { getToday, getPrevDay } from '@/utils/dateHelper.js'
-import { setTheme, setFontSize } from '@/utils/theme.js'
+import {
+  setTheme,
+  setFontSize,
+  applyNavigationBarTheme,
+  applyTabBarTheme,
+  getSystemTheme,
+  resolveThemeName
+} from '@/utils/theme.js'
 
 const APP_SETTINGS_KEY = 'appSettings'
 const AUTO_SYNC_LAST_RUN_KEY = 'autoSyncLastRunDate'
@@ -11,23 +18,6 @@ let hasThemeChangeListener = false
 
 function getDailyKey(dateStr) {
   return `${DAILY_KEY_PREFIX}${dateStr}`
-}
-
-function getSystemTheme() {
-  try {
-    const info = uni.getSystemInfoSync()
-    return info && info.theme === 'dark' ? 'dark' : 'light'
-  } catch (error) {
-    return 'light'
-  }
-}
-
-function resolveThemeName(settings, systemTheme = 'light') {
-  const rawTheme = settings && settings.theme ? settings.theme : 'mint'
-  const followSystem = !!(settings && (settings.followSystem || settings.themeMode === 'system' || rawTheme === 'system'))
-  const baseTheme = rawTheme === 'system' ? 'mint' : rawTheme
-  const useDark = followSystem ? systemTheme === 'dark' : !!(settings && settings.useDarkTheme)
-  return useDark ? `${baseTheme}-dark` : baseTheme
 }
 
 function sanitizeTaskForToday(task, index) {
@@ -51,6 +41,7 @@ export default {
     this.tryAutoSyncYesterdayToToday()
   },
   onShow() {
+    this.initAppAppearance()
     this.tryAutoSyncYesterdayToToday()
   },
   onHide() {
@@ -65,6 +56,8 @@ export default {
 
       const themeVars = setTheme(themeName)
       const fontConfig = setFontSize(fontLevel)
+      applyNavigationBarTheme(themeName)
+      applyTabBarTheme(themeName)
 
       const app = getApp()
       app.globalData = app.globalData || {}

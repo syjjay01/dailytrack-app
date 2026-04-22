@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <view class="home-page" :style="pageStyleVars">
     <view class="date-bar">
       <text class="arrow" @click="goPrevDay">‹</text>
@@ -47,12 +47,7 @@
 
           <view class="preview-row">
             <text class="preview-text">{{ getPreviewText(task) }}</text>
-            <image
-              v-if="getFirstImage(task)"
-              class="preview-image"
-              :src="getFirstImage(task)"
-              mode="aspectFill"
-            />
+            <image v-if="getFirstImage(task)" class="preview-image" :src="getFirstImage(task)" mode="aspectFill" />
             <view v-else-if="getVideoPath(task)" class="video-thumb">
               <text class="video-text">视频</text>
             </view>
@@ -62,11 +57,7 @@
     </scroll-view>
 
     <view class="bottom-bar">
-      <button
-        class="bottom-btn secondary"
-        :disabled="!isCurrentDateToday"
-        @click="syncToTomorrow"
-      >
+      <button class="bottom-btn secondary" :disabled="!isCurrentDateToday" @click="syncToTomorrow">
         同步任务到明天
       </button>
       <button class="bottom-btn primary" @click="openManageMenu">管理任务</button>
@@ -96,13 +87,13 @@
         <scroll-view class="sheet-list" scroll-y>
           <view v-if="availablePoolTasks.length === 0" class="sheet-empty">任务池中暂无可添加任务</view>
           <checkbox-group @change="onPoolSelectChange">
-            <label
-              v-for="poolTask in availablePoolTasks"
-              :key="poolTask.id"
-              class="sheet-item selectable"
-            >
+            <label v-for="poolTask in availablePoolTasks" :key="poolTask.id" class="sheet-item selectable">
               <text class="sheet-name">{{ poolTask.name }}</text>
-              <checkbox :value="String(poolTask.id)" :checked="poolSelectedIds.includes(String(poolTask.id))" color="#2fa184" />
+              <checkbox
+                :value="String(poolTask.id)"
+                :checked="poolSelectedIds.includes(String(poolTask.id))"
+                color="#2fa184"
+              />
             </label>
           </checkbox-group>
         </scroll-view>
@@ -119,7 +110,7 @@
 <script>
 import { getDailyRecord, setDailyRecord, getItem, getTaskPool } from '@/utils/storage.js'
 import { formatDate, getToday, getNextDay, getPrevDay, getWeekday } from '@/utils/dateHelper.js'
-import { getThemeVars, getFontConfig } from '@/utils/theme.js'
+import { getThemeVars, getFontConfig, applyNavigationBarTheme, applyTabBarTheme } from '@/utils/theme.js'
 
 const DAILY_KEY_PREFIX = 'dailyRecord_'
 const STATUS_FLOW = ['not_started', 'in_progress', 'completed']
@@ -172,8 +163,11 @@ export default {
     loadAppAppearance() {
       const app = getApp()
       const globalData = (app && app.globalData) || {}
-      this.activeThemeVars = globalData.themeVars || getThemeVars(globalData.activeTheme || 'mint')
+      const activeTheme = globalData.activeTheme || 'mint'
+      this.activeThemeVars = globalData.themeVars || getThemeVars(activeTheme)
       this.activeFontConfig = globalData.fontConfig || getFontConfig((globalData.appSettings && globalData.appSettings.fontSize) || 'normal')
+      applyNavigationBarTheme(activeTheme)
+      applyTabBarTheme(activeTheme)
     },
     getDailyStorageKey(dateStr) {
       return `${DAILY_KEY_PREFIX}${dateStr}`
@@ -471,8 +465,6 @@ export default {
   --mint-shadow: 0 10rpx 26rpx rgba(43, 132, 112, 0.12);
   --mint-primary: var(--primary-color);
   --mint-primary-2: var(--primary-color);
-  --mint-warn: #f0b251;
-  --mint-done: #47b76f;
 }
 
 .date-bar {
@@ -769,14 +761,9 @@ export default {
   color: var(--mint-title);
 }
 
-.delete-btn,
-.add-one {
+.delete-btn {
   font-size: calc(26rpx * var(--font-scale));
   color: #e86a70;
-}
-
-.add-one {
-  color: var(--mint-primary-2);
 }
 
 .sheet-add,

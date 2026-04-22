@@ -61,6 +61,23 @@ const FONT_SIZE_MAP = {
   large: { rootPx: 18, varSize: '32rpx', scale: 1.1 }
 }
 
+function getSystemTheme() {
+  try {
+    const info = uni.getSystemInfoSync()
+    return info && info.theme === 'dark' ? 'dark' : 'light'
+  } catch (error) {
+    return 'light'
+  }
+}
+
+function resolveThemeName(settings = {}, systemTheme = 'light') {
+  const rawTheme = settings && settings.theme ? settings.theme : 'mint'
+  const followSystem = !!(settings && (settings.followSystem || settings.themeMode === 'system' || rawTheme === 'system'))
+  const baseTheme = rawTheme === 'system' ? 'mint' : rawTheme
+  const useDark = followSystem ? systemTheme === 'dark' : !!(settings && settings.useDarkTheme)
+  return useDark ? `${baseTheme}-dark` : baseTheme
+}
+
 function applyCssVars(varMap) {
   // #ifdef H5
   if (typeof document !== 'undefined' && document.documentElement) {
@@ -101,9 +118,58 @@ function getFontConfig(level = 'normal') {
   return FONT_SIZE_MAP[level] || FONT_SIZE_MAP.normal
 }
 
+function getNavigationBarStyle(themeName = 'mint') {
+  const vars = getThemeVars(themeName)
+  const isDark = String(themeName).includes('-dark')
+  return {
+    frontColor: isDark ? '#ffffff' : '#000000',
+    backgroundColor: vars['--app-nav-bg'] || '#e8faf4'
+  }
+}
+
+function applyNavigationBarTheme(themeName = 'mint') {
+  const style = getNavigationBarStyle(themeName)
+  if (typeof uni !== 'undefined' && typeof uni.setNavigationBarColor === 'function') {
+    uni.setNavigationBarColor({
+      frontColor: style.frontColor,
+      backgroundColor: style.backgroundColor,
+      animation: {
+        duration: 0,
+        timingFunc: 'linear'
+      }
+    })
+  }
+  return style
+}
+
+function getTabBarStyle(themeName = 'mint') {
+  const vars = getThemeVars(themeName)
+  const isDark = String(themeName).includes('-dark')
+  return {
+    color: isDark ? '#9ab8ad' : '#7F8792',
+    selectedColor: vars['--primary-color'] || '#2FA184',
+    backgroundColor: vars['--card-bg-color'] || '#F7FFFC',
+    borderStyle: isDark ? 'black' : 'white'
+  }
+}
+
+function applyTabBarTheme(themeName = 'mint') {
+  const style = getTabBarStyle(themeName)
+  if (typeof uni !== 'undefined' && typeof uni.setTabBarStyle === 'function') {
+    uni.setTabBarStyle(style)
+  }
+  return style
+}
+
 export {
+  getSystemTheme,
+  resolveThemeName,
   setTheme,
   setFontSize,
   getThemeVars,
-  getFontConfig
+  getFontConfig,
+  getNavigationBarStyle,
+  applyNavigationBarTheme,
+  getTabBarStyle,
+  applyTabBarTheme
 }

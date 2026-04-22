@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <view class="task-pool-page" :style="pageStyleVars">
     <view class="header">
       <view>
@@ -22,8 +22,8 @@
           </view>
 
           <view v-if="!isSortMode" class="task-actions">
-            <text class="action-btn" @click="openEditDialog(task)">✏️</text>
-            <text class="action-btn" @click="handleDelete(task)">🗑️</text>
+            <text class="action-btn" @click="openEditDialog(task)">✎</text>
+            <text class="action-btn" @click="handleDelete(task)">🗑</text>
           </view>
 
           <view v-else class="sort-actions">
@@ -58,7 +58,7 @@
 
 <script>
 import { getTaskPool, setTaskPool } from '@/utils/storage.js'
-import { getThemeVars, getFontConfig } from '@/utils/theme.js'
+import { getThemeVars, getFontConfig, applyNavigationBarTheme, applyTabBarTheme } from '@/utils/theme.js'
 
 const MAX_TASK_COUNT = 20
 
@@ -96,8 +96,11 @@ export default {
     loadAppAppearance() {
       const app = getApp()
       const globalData = (app && app.globalData) || {}
-      this.activeThemeVars = globalData.themeVars || getThemeVars(globalData.activeTheme || 'mint')
+      const activeTheme = globalData.activeTheme || 'mint'
+      this.activeThemeVars = globalData.themeVars || getThemeVars(activeTheme)
       this.activeFontConfig = globalData.fontConfig || getFontConfig((globalData.appSettings && globalData.appSettings.fontSize) || 'normal')
+      applyNavigationBarTheme(activeTheme)
+      applyTabBarTheme(activeTheme)
     },
     loadTaskPool() {
       const list = getTaskPool()
@@ -228,7 +231,6 @@ export default {
   --mint-shadow: 0 8rpx 24rpx rgba(43, 132, 112, 0.1);
   --mint-accent: var(--primary-color);
   --mint-accent-strong: var(--primary-color);
-  --mint-danger: #e85f64;
 }
 
 .header {
@@ -429,19 +431,5 @@ export default {
 .dialog-btn.confirm {
   background: var(--mint-accent);
   color: #ffffff;
-}
-
-@media (prefers-color-scheme: dark) {
-  .task-pool-page {
-    --mint-border: #2b5950;
-    --mint-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.32);
-    --mint-danger: #f17f83;
-  }
-
-  .sort-mode-btn,
-  .sort-btn,
-  .dialog-input {
-    background: #1e443b;
-  }
 }
 </style>
