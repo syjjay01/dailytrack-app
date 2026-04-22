@@ -265,8 +265,17 @@ export default {
       })
     },
     chooseVideoFlow() {
-      uni.chooseVideo({
-        sourceType: ['album', 'camera'],
+      uni.showActionSheet({
+        itemList: ['录制视频（最长5分钟）', '从本地视频选择'],
+        success: (sheetRes) => {
+          const useCamera = sheetRes.tapIndex === 0
+          this.chooseVideoBySource(useCamera)
+        }
+      })
+    },
+    chooseVideoBySource(useCamera = false) {
+      const chooseOptions = {
+        sourceType: useCamera ? ['camera'] : ['album'],
         compressed: false,
         success: async (res) => {
           if (!res.tempFilePath) {
@@ -284,13 +293,14 @@ export default {
               await this.clearVideo(true)
             }
 
+            const maxDurationSec = useCamera ? 300 : Number.MAX_SAFE_INTEGER
             const savedPath = await validateAndSaveVideo(
               {
                 tempFilePath: res.tempFilePath,
                 duration: res.duration,
                 size: res.size
               },
-              300,
+              maxDurationSec,
               500
             )
             this.video = {
@@ -301,12 +311,22 @@ export default {
             this.mediaType = 'video'
             this.showToast('视频已添加', 'success')
           } catch (error) {
-            this.showToast('视频处理失败')
+            if (error && error.message === 'VIDEO_SIZE_EXCEEDED') {
+              this.showToast('视频不能超过500MB')
+            } else if (error && error.message === 'VIDEO_DURATION_EXCEEDED') {
+              this.showToast('录制视频最长5分钟')
+            } else {
+              this.showToast('视频处理失败')
+            }
           } finally {
             uni.hideLoading()
           }
         }
-      })
+      }
+      if (useCamera) {
+        chooseOptions.maxDuration = 300
+      }
+      uni.chooseVideo(chooseOptions)
     },
     async removeImage(index) {
       if (index < 0 || index >= this.images.length) {
@@ -366,7 +386,7 @@ export default {
       uni.saveImageToPhotosAlbum({
         filePath: path,
         success: () => {
-          this.showToast('图片已保存到相册', 'success')
+          this.showToast('图片已保存', 'success')
         },
         fail: (err) => {
           this.handleAlbumSaveFail(err, '图片')
@@ -433,7 +453,7 @@ export default {
       uni.saveVideoToPhotosAlbum({
         filePath: this.video.path,
         success: () => {
-          this.showToast('视频已保存到相册', 'success')
+          this.showToast('视频已保存', 'success')
         },
         fail: (err) => {
           this.handleAlbumSaveFail(err, '视频')
