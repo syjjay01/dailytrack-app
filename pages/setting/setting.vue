@@ -77,7 +77,6 @@
 </template>
 
 <script>
-import manifest from '@/manifest.json'
 import {
   getItem,
   setItem,
@@ -108,7 +107,7 @@ export default {
       activeFontConfig: getFontConfig('normal'),
       cacheSizeBytes: 0,
       cleaning: false,
-      versionName: (manifest && manifest.versionName) || '1.0.0',
+      versionName: '1.0.0',
       themeOptions: [
         { label: '薄荷清晨', value: 'mint', desc: '清爽轻盈，适合日常打卡' },
         { label: '暖阳日记', value: 'warm', desc: '温暖柔和，记录治愈时刻' },
@@ -151,20 +150,11 @@ export default {
   },
   onShow() {
     this.loadSettings()
-    this.loadVersionName()
     this.refreshCacheSize()
   },
   methods: {
     showToast(title, icon = 'none') {
       uni.showToast({ title, icon, duration: 1800 })
-    },
-    loadVersionName() {
-      // #ifdef APP-PLUS
-      if (typeof plus !== 'undefined' && plus.runtime && plus.runtime.version) {
-        this.versionName = plus.runtime.version
-        return
-      }
-      // #endif
     },
     loadSettings() {
       const local = getItem(APP_SETTINGS_KEY)

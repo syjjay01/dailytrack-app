@@ -63,14 +63,16 @@ export default {
       const themeName = resolveThemeName(settings, systemTheme)
       const fontLevel = settings.fontSize || 'normal'
 
-      setTheme(themeName)
-      setFontSize(fontLevel)
+      const themeVars = setTheme(themeName)
+      const fontConfig = setFontSize(fontLevel)
 
       const app = getApp()
       app.globalData = app.globalData || {}
       app.globalData.appSettings = settings
       app.globalData.systemTheme = systemTheme
       app.globalData.activeTheme = themeName
+      app.globalData.themeVars = themeVars
+      app.globalData.fontConfig = fontConfig
     },
     registerThemeChangeListener() {
       if (hasThemeChangeListener || typeof uni.onThemeChange !== 'function') {

@@ -1,5 +1,5 @@
-﻿<template>
-  <view class="home-page">
+<template>
+  <view class="home-page" :style="pageStyleVars">
     <view class="date-bar">
       <text class="arrow" @click="goPrevDay">‹</text>
       <picker mode="date" :value="currentDate" @change="onDatePick" class="date-picker">
@@ -9,8 +9,10 @@
       </picker>
       <text class="arrow" @click="goNextDay">›</text>
     </view>
+
     <view class="date-tools">
       <text v-if="!isCurrentDateToday" class="today-btn" @click="backToToday">回到今日</text>
+      <text v-if="dailyTasks.length > 1" class="sort-tip">长按 ≡ 拖拽排序</text>
     </view>
 
     <scroll-view class="task-list" scroll-y>
@@ -20,14 +22,24 @@
 
       <view v-else>
         <view
-          v-for="task in dailyTasks"
+          v-for="(task, index) in dailyTasks"
           :key="task.id"
           class="task-card"
+          :class="{ dragging: dragState.active && dragState.taskId === task.id }"
           @click="goDetail(task)"
         >
           <view class="task-head">
             <text class="task-name">{{ task.name }}</text>
             <view class="status-wrap">
+              <text
+                class="drag-handle"
+                @longpress.stop="startDrag(index, $event)"
+                @touchmove.stop.prevent="onDragMove($event)"
+                @touchend.stop="endDrag"
+                @touchcancel.stop="endDrag"
+              >
+                ≡
+              </text>
               <text class="status-tag" :class="statusClass(task.status)">{{ statusLabel(task.status) }}</text>
               <text class="status-btn" @click.stop="toggleTaskStatus(task)">•••</text>
             </view>
@@ -107,6 +119,7 @@
 <script>
 import { getDailyRecord, setDailyRecord, getItem, getTaskPool } from '@/utils/storage.js'
 import { formatDate, getToday, getNextDay, getPrevDay, getWeekday } from '@/utils/dateHelper.js'
+import { getThemeVars, getFontConfig } from '@/utils/theme.js'
 
 const DAILY_KEY_PREFIX = 'dailyRecord_'
 const STATUS_FLOW = ['not_started', 'in_progress', 'completed']
@@ -116,10 +129,19 @@ export default {
     return {
       currentDate: getToday(),
       dailyTasks: [],
+      activeThemeVars: getThemeVars('mint'),
+      activeFontConfig: getFontConfig('normal'),
       editPanelVisible: false,
       poolPickerVisible: false,
       availablePoolTasks: [],
-      poolSelectedIds: []
+      poolSelectedIds: [],
+      dragState: {
+        active: false,
+        index: -1,
+        startY: 0,
+        itemHeight: 120,
+        taskId: ''
+      }
     }
   },
   computed: {
@@ -130,34 +152,40 @@ export default {
     },
     isCurrentDateToday() {
       return this.currentDate === getToday()
+    },
+    pageStyleVars() {
+      return {
+        ...this.activeThemeVars,
+        '--page-font-size': this.activeFontConfig.varSize,
+        '--font-scale': String(this.activeFontConfig.scale)
+      }
     }
   },
   onShow() {
+    this.loadAppAppearance()
     this.loadDailyTasks(this.currentDate)
   },
   methods: {
     showToast(title, icon = 'none') {
       uni.showToast({ title, icon, duration: 1800 })
     },
+    loadAppAppearance() {
+      const app = getApp()
+      const globalData = (app && app.globalData) || {}
+      this.activeThemeVars = globalData.themeVars || getThemeVars(globalData.activeTheme || 'mint')
+      this.activeFontConfig = globalData.fontConfig || getFontConfig((globalData.appSettings && globalData.appSettings.fontSize) || 'normal')
+    },
     getDailyStorageKey(dateStr) {
       return `${DAILY_KEY_PREFIX}${dateStr}`
     },
     statusLabel(status) {
-      if (status === 'in_progress') {
-        return '进行中'
-      }
-      if (status === 'completed') {
-        return '已完成'
-      }
+      if (status === 'in_progress') return '进行中'
+      if (status === 'completed') return '已完成'
       return '未开始'
     },
     statusClass(status) {
-      if (status === 'in_progress') {
-        return 'progress'
-      }
-      if (status === 'completed') {
-        return 'done'
-      }
+      if (status === 'in_progress') return 'progress'
+      if (status === 'completed') return 'done'
       return 'default'
     },
     normalizeTask(raw, index = 0) {
@@ -208,7 +236,6 @@ export default {
     },
     loadDailyTasks(dateStr) {
       const storageValue = getItem(this.getDailyStorageKey(dateStr))
-
       if (Array.isArray(storageValue)) {
         this.dailyTasks = storageValue
           .map((item, index) => this.normalizeTask(item, index))
@@ -223,17 +250,20 @@ export default {
           .sort((a, b) => a.sortOrder - b.sortOrder)
         return
       }
+
       this.dailyTasks = []
     },
     goPrevDay() {
       this.currentDate = getPrevDay(this.currentDate)
       this.loadDailyTasks(this.currentDate)
     },
+    goNextDay() {
+      this.currentDate = getNextDay(this.currentDate)
+      this.loadDailyTasks(this.currentDate)
+    },
     onDatePick(e) {
       const value = e && e.detail && e.detail.value ? e.detail.value : ''
-      if (!value) {
-        return
-      }
+      if (!value) return
       this.currentDate = value
       this.loadDailyTasks(this.currentDate)
     },
@@ -241,32 +271,20 @@ export default {
       this.currentDate = getToday()
       this.loadDailyTasks(this.currentDate)
     },
-    goNextDay() {
-      this.currentDate = getNextDay(this.currentDate)
-      this.loadDailyTasks(this.currentDate)
-    },
     toggleTaskStatus(task) {
+      if (this.dragState.active) return
       const idx = this.dailyTasks.findIndex((item) => item.id === task.id)
-      if (idx < 0) {
-        return
-      }
+      if (idx < 0) return
       const current = this.dailyTasks[idx].status || 'not_started'
       const currentIndex = STATUS_FLOW.indexOf(current)
       const nextStatus = STATUS_FLOW[(currentIndex + 1 + STATUS_FLOW.length) % STATUS_FLOW.length]
-      this.dailyTasks[idx] = {
-        ...this.dailyTasks[idx],
-        status: nextStatus
-      }
+      this.dailyTasks[idx] = { ...this.dailyTasks[idx], status: nextStatus }
       this.saveCurrentDateTasks()
     },
     getPreviewText(task) {
       const text = String(task.checkinText || '').trim()
-      if (!text) {
-        return '暂无打卡内容'
-      }
-      if (text.length <= 20) {
-        return text
-      }
+      if (!text) return '暂无打卡内容'
+      if (text.length <= 20) return text
       return `${text.slice(0, 20)}...`
     },
     getFirstImage(task) {
@@ -276,6 +294,7 @@ export default {
       return task.video || ''
     },
     goDetail(task) {
+      if (this.dragState.active) return
       uni.navigateTo({
         url: `/pages/checkin-detail/checkin-detail?date=${this.currentDate}&taskId=${task.id}`
       })
@@ -299,29 +318,10 @@ export default {
       uni.showActionSheet({
         itemList: ['从任务池添加任务', '编辑当天任务列表'],
         success: (res) => {
-          if (res.tapIndex === 0) {
-            this.openPoolPicker()
-          } else if (res.tapIndex === 1) {
-            this.editPanelVisible = true
-          }
+          if (res.tapIndex === 0) this.openPoolPicker()
+          if (res.tapIndex === 1) this.editPanelVisible = true
         }
       })
-    },
-    openPoolPicker() {
-      this.availablePoolTasks = this.getAvailablePoolTasks()
-
-      if (this.availablePoolTasks.length === 0) {
-        this.showToast('没有可添加的任务')
-        return
-      }
-
-      this.editPanelVisible = false
-      this.poolSelectedIds = []
-      this.poolPickerVisible = true
-    },
-    onPoolSelectChange(e) {
-      const values = (e && e.detail && e.detail.value) || []
-      this.poolSelectedIds = values
     },
     getAvailablePoolTasks() {
       const pool = getTaskPool().slice().sort((a, b) => {
@@ -332,12 +332,24 @@ export default {
       const existingIds = new Set(this.dailyTasks.map((item) => String(item.id)))
       return pool.filter((item) => !existingIds.has(String(item.id)))
     },
+    openPoolPicker() {
+      this.availablePoolTasks = this.getAvailablePoolTasks()
+      if (this.availablePoolTasks.length === 0) {
+        this.showToast('没有可添加的任务')
+        return
+      }
+      this.editPanelVisible = false
+      this.poolSelectedIds = []
+      this.poolPickerVisible = true
+    },
+    onPoolSelectChange(e) {
+      this.poolSelectedIds = (e && e.detail && e.detail.value) || []
+    },
     addSelectedFromPool() {
       if (this.poolSelectedIds.length === 0) {
         this.showToast('请先选择任务')
         return
       }
-
       const selectedSet = new Set(this.poolSelectedIds.map((id) => String(id)))
       const toAdd = this.availablePoolTasks.filter((task) => selectedSet.has(String(task.id)))
       if (toAdd.length === 0) {
@@ -364,19 +376,81 @@ export default {
         content: `确定删除「${task.name}」吗？`,
         confirmText: '删除',
         success: (res) => {
-          if (!res.confirm) {
-            return
-          }
+          if (!res.confirm) return
           this.dailyTasks = this.dailyTasks
             .filter((item) => item.id !== task.id)
-            .map((item, index) => ({
-              ...item,
-              sortOrder: index + 1
-            }))
+            .map((item, index) => ({ ...item, sortOrder: index + 1 }))
           this.saveCurrentDateTasks()
           this.showToast('已删除', 'success')
         }
       })
+    },
+    getPointY(event) {
+      if (event && event.touches && event.touches[0]) {
+        return Number(event.touches[0].pageY || event.touches[0].clientY || 0)
+      }
+      if (event && event.changedTouches && event.changedTouches[0]) {
+        return Number(event.changedTouches[0].pageY || event.changedTouches[0].clientY || 0)
+      }
+      if (event && event.detail) {
+        return Number(event.detail.y || 0)
+      }
+      return 0
+    },
+    measureTaskCardHeight(callback) {
+      const query = uni.createSelectorQuery().in(this)
+      query.select('.task-card').boundingClientRect()
+      query.exec((res) => {
+        const rect = res && res[0]
+        callback(rect && rect.height ? rect.height : 120)
+      })
+    },
+    moveTask(list, fromIndex, toIndex) {
+      const next = list.slice()
+      const item = next.splice(fromIndex, 1)[0]
+      next.splice(toIndex, 0, item)
+      return next
+    },
+    startDrag(index, event) {
+      if (this.dailyTasks.length <= 1) return
+      this.measureTaskCardHeight((height) => {
+        this.dragState = {
+          active: true,
+          index,
+          startY: this.getPointY(event),
+          itemHeight: height || 120,
+          taskId: this.dailyTasks[index] ? this.dailyTasks[index].id : ''
+        }
+      })
+    },
+    onDragMove(event) {
+      if (!this.dragState.active) return
+      const currentY = this.getPointY(event)
+      const deltaY = currentY - this.dragState.startY
+      const threshold = this.dragState.itemHeight * 0.45
+      if (Math.abs(deltaY) < threshold) return
+
+      const direction = deltaY > 0 ? 1 : -1
+      const nextIndex = Math.max(0, Math.min(this.dailyTasks.length - 1, this.dragState.index + direction))
+      if (nextIndex === this.dragState.index) return
+
+      this.dailyTasks = this.moveTask(this.dailyTasks, this.dragState.index, nextIndex)
+      this.dragState = {
+        ...this.dragState,
+        index: nextIndex,
+        startY: currentY
+      }
+    },
+    endDrag() {
+      if (!this.dragState.active) return
+      this.saveCurrentDateTasks()
+      this.dragState = {
+        active: false,
+        index: -1,
+        startY: 0,
+        itemHeight: 120,
+        taskId: ''
+      }
     }
   }
 }
@@ -387,16 +461,16 @@ export default {
   min-height: 100vh;
   padding: 24rpx 24rpx 180rpx;
   box-sizing: border-box;
-  background: var(--mint-bg);
+  background: var(--bg-color);
+  font-size: var(--page-font-size);
 
-  --mint-bg: #eefcf8;
-  --mint-card: #ffffff;
-  --mint-title: #14322c;
-  --mint-sub: #6b9388;
+  --mint-card: var(--card-bg-color);
+  --mint-title: var(--text-color);
+  --mint-sub: var(--text-secondary-color);
   --mint-border: #cdeee2;
   --mint-shadow: 0 10rpx 26rpx rgba(43, 132, 112, 0.12);
-  --mint-primary: #43c5a1;
-  --mint-primary-2: #2fa184;
+  --mint-primary: var(--primary-color);
+  --mint-primary-2: var(--primary-color);
   --mint-warn: #f0b251;
   --mint-done: #47b76f;
 }
@@ -425,42 +499,49 @@ export default {
   font-size: 40rpx;
 }
 
+.date-picker,
 .date-center {
   flex: 1;
+}
+
+.date-center {
   text-align: center;
 }
 
-.date-picker {
-  flex: 1;
-}
-
 .date-text {
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   font-weight: 600;
   color: var(--mint-title);
-}
-
-.today-btn {
-  align-self: flex-end;
-  padding: 0 18rpx;
-  height: 50rpx;
-  line-height: 50rpx;
-  border-radius: 12rpx;
-  font-size: 24rpx;
-  color: var(--mint-primary-2);
-  background: #e9f9f3;
 }
 
 .date-tools {
   min-height: 56rpx;
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 8rpx;
 }
 
+.today-btn,
+.sort-tip {
+  font-size: calc(24rpx * var(--font-scale));
+}
+
+.today-btn {
+  padding: 0 18rpx;
+  height: 50rpx;
+  line-height: 50rpx;
+  border-radius: 12rpx;
+  color: var(--mint-primary-2);
+  background: #e9f9f3;
+}
+
+.sort-tip {
+  color: var(--mint-sub);
+}
+
 .task-list {
-  max-height: calc(100vh - 330rpx);
+  max-height: calc(100vh - 360rpx);
 }
 
 .empty-wrap {
@@ -469,7 +550,7 @@ export default {
 }
 
 .empty-text {
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   color: var(--mint-sub);
 }
 
@@ -480,6 +561,13 @@ export default {
   box-shadow: var(--mint-shadow);
   padding: 24rpx;
   margin-bottom: 18rpx;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease;
+}
+
+.task-card.dragging {
+  transform: scale(0.985);
+  opacity: 0.84;
+  box-shadow: 0 18rpx 34rpx rgba(43, 132, 112, 0.22);
 }
 
 .task-head {
@@ -492,7 +580,7 @@ export default {
 .task-name {
   flex: 1;
   min-width: 0;
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale));
   color: var(--mint-title);
   font-weight: 600;
   word-break: break-all;
@@ -504,8 +592,19 @@ export default {
   gap: 10rpx;
 }
 
+.drag-handle {
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 48rpx;
+  text-align: center;
+  border-radius: 14rpx;
+  background: #edf8f4;
+  color: var(--mint-primary-2);
+  font-size: 30rpx;
+}
+
 .status-tag {
-  font-size: 22rpx;
+  font-size: calc(22rpx * var(--font-scale));
   border-radius: 999rpx;
   padding: 8rpx 16rpx;
 }
@@ -547,7 +646,7 @@ export default {
 .preview-text {
   flex: 1;
   min-width: 0;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-sub);
 }
 
@@ -568,7 +667,7 @@ export default {
 }
 
 .video-text {
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-primary-2);
 }
 
@@ -586,7 +685,7 @@ export default {
   height: 90rpx;
   line-height: 90rpx;
   border-radius: 999rpx;
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   margin: 0;
 }
 
@@ -632,7 +731,7 @@ export default {
 
 .sheet-title {
   display: block;
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   color: var(--mint-title);
   font-weight: 600;
   margin-bottom: 20rpx;
@@ -646,32 +745,33 @@ export default {
   text-align: center;
   color: var(--mint-sub);
   padding: 48rpx 0;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale));
 }
 
 .sheet-item {
-  height: 84rpx;
+  min-height: 84rpx;
   border-radius: 16rpx;
   border: 2rpx solid var(--mint-border);
-  padding: 0 20rpx;
+  padding: 18rpx 20rpx;
   margin-bottom: 14rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  box-sizing: border-box;
 }
 
 .sheet-item.selectable {
-  height: 92rpx;
+  min-height: 92rpx;
 }
 
 .sheet-name {
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale));
   color: var(--mint-title);
 }
 
 .delete-btn,
 .add-one {
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale));
   color: #e86a70;
 }
 
@@ -684,7 +784,7 @@ export default {
   height: 80rpx;
   line-height: 80rpx;
   border-radius: 16rpx;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale));
   margin-top: 10rpx;
 }
 
@@ -705,19 +805,14 @@ export default {
 
 @media (prefers-color-scheme: dark) {
   .home-page {
-    --mint-bg: #10241f;
-    --mint-card: #173730;
-    --mint-title: #def5ee;
-    --mint-sub: #91b8ae;
     --mint-border: #2b5950;
     --mint-shadow: 0 10rpx 26rpx rgba(0, 0, 0, 0.35);
-    --mint-primary: #54d2ae;
-    --mint-primary-2: #3ca98d;
   }
 
   .arrow,
   .status-btn,
-  .today-btn {
+  .today-btn,
+  .drag-handle {
     background: #1e443b;
   }
 

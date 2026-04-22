@@ -1,5 +1,5 @@
-﻿<template>
-  <view class="task-pool-page">
+<template>
+  <view class="task-pool-page" :style="pageStyleVars">
     <view class="header">
       <view>
         <text class="title">任务池管理</text>
@@ -28,13 +28,7 @@
 
           <view v-else class="sort-actions">
             <button class="sort-btn" :disabled="index === 0" @click="moveTaskUp(index)">上移</button>
-            <button
-              class="sort-btn"
-              :disabled="index === taskPool.length - 1"
-              @click="moveTaskDown(index)"
-            >
-              下移
-            </button>
+            <button class="sort-btn" :disabled="index === taskPool.length - 1" @click="moveTaskDown(index)">下移</button>
           </view>
         </view>
       </view>
@@ -64,6 +58,7 @@
 
 <script>
 import { getTaskPool, setTaskPool } from '@/utils/storage.js'
+import { getThemeVars, getFontConfig } from '@/utils/theme.js'
 
 const MAX_TASK_COUNT = 20
 
@@ -71,6 +66,8 @@ export default {
   data() {
     return {
       taskPool: [],
+      activeThemeVars: getThemeVars('mint'),
+      activeFontConfig: getFontConfig('normal'),
       isSortMode: false,
       dialogVisible: false,
       dialogType: 'add',
@@ -79,16 +76,28 @@ export default {
       editingTaskId: ''
     }
   },
+  computed: {
+    pageStyleVars() {
+      return {
+        ...this.activeThemeVars,
+        '--page-font-size': this.activeFontConfig.varSize,
+        '--font-scale': String(this.activeFontConfig.scale)
+      }
+    }
+  },
   onShow() {
+    this.loadAppAppearance()
     this.loadTaskPool()
   },
   methods: {
     showToast(title, icon = 'none') {
-      uni.showToast({
-        title,
-        icon,
-        duration: 1800
-      })
+      uni.showToast({ title, icon, duration: 1800 })
+    },
+    loadAppAppearance() {
+      const app = getApp()
+      const globalData = (app && app.globalData) || {}
+      this.activeThemeVars = globalData.themeVars || getThemeVars(globalData.activeTheme || 'mint')
+      this.activeFontConfig = globalData.fontConfig || getFontConfig((globalData.appSettings && globalData.appSettings.fontSize) || 'normal')
     },
     loadTaskPool() {
       const list = getTaskPool()
@@ -96,14 +105,7 @@ export default {
     },
     normalizeTaskList(list) {
       const source = Array.isArray(list) ? list.slice() : []
-      source.sort((a, b) => {
-        const sa = Number(a && a.sortOrder ? a.sortOrder : 0)
-        const sb = Number(b && b.sortOrder ? b.sortOrder : 0)
-        if (sa === sb) {
-          return 0
-        }
-        return sa - sb
-      })
+      source.sort((a, b) => Number(a && a.sortOrder ? a.sortOrder : 0) - Number(b && b.sortOrder ? b.sortOrder : 0))
       return source.map((item, index) => ({
         id: item && item.id ? item.id : `task_${Date.now()}_${index}`,
         name: item && item.name ? item.name : '',
@@ -169,10 +171,7 @@ export default {
       } else {
         const nextList = this.taskPool.map((item) => {
           if (item.id === this.editingTaskId) {
-            return {
-              ...item,
-              name
-            }
+            return { ...item, name }
           }
           return item
         })
@@ -189,9 +188,7 @@ export default {
         confirmText: '删除',
         confirmColor: '#e85f64',
         success: (res) => {
-          if (!res.confirm) {
-            return
-          }
+          if (!res.confirm) return
           const nextList = this.taskPool.filter((item) => item.id !== task.id)
           this.persistTaskPool(nextList)
           this.showToast('删除成功', 'success')
@@ -199,23 +196,17 @@ export default {
       })
     },
     moveTaskUp(index) {
-      if (index <= 0) {
-        return
-      }
+      if (index <= 0) return
       const list = this.taskPool.slice()
-      const temp = list[index - 1]
-      list[index - 1] = list[index]
-      list[index] = temp
+      const item = list.splice(index, 1)[0]
+      list.splice(index - 1, 0, item)
       this.persistTaskPool(list)
     },
     moveTaskDown(index) {
-      if (index >= this.taskPool.length - 1) {
-        return
-      }
+      if (index >= this.taskPool.length - 1) return
       const list = this.taskPool.slice()
-      const temp = list[index + 1]
-      list[index + 1] = list[index]
-      list[index] = temp
+      const item = list.splice(index, 1)[0]
+      list.splice(index + 1, 0, item)
       this.persistTaskPool(list)
     }
   }
@@ -225,18 +216,18 @@ export default {
 <style scoped>
 .task-pool-page {
   min-height: 100vh;
-  background: var(--mint-bg);
+  background: var(--bg-color);
   padding: 30rpx 28rpx 180rpx;
   box-sizing: border-box;
+  font-size: var(--page-font-size);
 
-  --mint-bg: #eefcf8;
-  --mint-card-bg: #ffffff;
-  --mint-title: #173730;
-  --mint-subtitle: #689489;
+  --mint-card-bg: var(--card-bg-color);
+  --mint-title: var(--text-color);
+  --mint-subtitle: var(--text-secondary-color);
   --mint-border: #cdeee2;
   --mint-shadow: 0 8rpx 24rpx rgba(43, 132, 112, 0.1);
-  --mint-accent: #43c5a1;
-  --mint-accent-strong: #2fa184;
+  --mint-accent: var(--primary-color);
+  --mint-accent-strong: var(--primary-color);
   --mint-danger: #e85f64;
 }
 
@@ -249,7 +240,7 @@ export default {
 
 .title {
   display: block;
-  font-size: 40rpx;
+  font-size: calc(40rpx * var(--font-scale));
   font-weight: 700;
   color: var(--mint-title);
 }
@@ -257,7 +248,7 @@ export default {
 .subtitle {
   display: block;
   margin-top: 8rpx;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-subtitle);
 }
 
@@ -267,7 +258,7 @@ export default {
   line-height: 64rpx;
   padding: 0 24rpx;
   border-radius: 999rpx;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-accent-strong);
   background: #e8faf4;
   border: 2rpx solid var(--mint-border);
@@ -287,7 +278,7 @@ export default {
 }
 
 .empty-text {
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale));
   color: var(--mint-subtitle);
 }
 
@@ -310,7 +301,7 @@ export default {
 }
 
 .task-name {
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   color: var(--mint-title);
   word-break: break-all;
 }
@@ -336,7 +327,7 @@ export default {
   height: 58rpx;
   line-height: 58rpx;
   border-radius: 16rpx;
-  font-size: 24rpx;
+  font-size: calc(24rpx * var(--font-scale));
   color: var(--mint-accent-strong);
   background: #effaf6;
   border: 2rpx solid var(--mint-border);
@@ -363,7 +354,7 @@ export default {
   border-radius: 999rpx;
   border: none;
   color: #ffffff;
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale));
   font-weight: 600;
   background: linear-gradient(120deg, var(--mint-accent) 0%, var(--mint-accent-strong) 100%);
   box-shadow: 0 14rpx 28rpx rgba(47, 161, 132, 0.3);
@@ -395,7 +386,7 @@ export default {
 
 .dialog-title {
   display: block;
-  font-size: 32rpx;
+  font-size: calc(32rpx * var(--font-scale));
   color: var(--mint-title);
   font-weight: 600;
   margin-bottom: 20rpx;
@@ -407,7 +398,7 @@ export default {
   border-radius: 16rpx;
   background: #f7fffc;
   padding: 0 20rpx;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale));
   color: var(--mint-title);
 }
 
@@ -422,7 +413,7 @@ export default {
   height: 76rpx;
   line-height: 76rpx;
   border-radius: 14rpx;
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale));
   margin: 0;
 }
 
@@ -442,24 +433,15 @@ export default {
 
 @media (prefers-color-scheme: dark) {
   .task-pool-page {
-    --mint-bg: #10241f;
-    --mint-card-bg: #173730;
-    --mint-title: #def5ee;
-    --mint-subtitle: #90b7ac;
     --mint-border: #2b5950;
     --mint-shadow: 0 10rpx 28rpx rgba(0, 0, 0, 0.32);
-    --mint-accent: #54d2ae;
-    --mint-accent-strong: #3ca98d;
     --mint-danger: #f17f83;
   }
 
   .sort-mode-btn,
-  .sort-btn {
-    background: #1e443b;
-  }
-
+  .sort-btn,
   .dialog-input {
-    background: #1b4038;
+    background: #1e443b;
   }
 }
 </style>
