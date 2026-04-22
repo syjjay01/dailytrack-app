@@ -56,9 +56,9 @@ const THEME_VARS = {
 }
 
 const FONT_SIZE_MAP = {
-  small: { rootPx: 14, varSize: '24rpx' },
-  normal: { rootPx: 16, varSize: '28rpx' },
-  large: { rootPx: 18, varSize: '32rpx' }
+  small: { rootPx: 14, varSize: '24rpx', scale: 0.9 },
+  normal: { rootPx: 16, varSize: '28rpx', scale: 1 },
+  large: { rootPx: 18, varSize: '32rpx', scale: 1.1 }
 }
 
 function applyCssVars(varMap) {
@@ -72,15 +72,16 @@ function applyCssVars(varMap) {
 }
 
 function setTheme(themeName = 'mint') {
-  const vars = THEME_VARS[themeName] || THEME_VARS.mint
+  const vars = getThemeVars(themeName)
   applyCssVars(vars)
   return vars
 }
 
 function setFontSize(level = 'normal') {
-  const font = FONT_SIZE_MAP[level] || FONT_SIZE_MAP.normal
+  const font = getFontConfig(level)
   applyCssVars({
-    '--app-font-size': font.varSize
+    '--app-font-size': font.varSize,
+    '--font-scale': String(font.scale)
   })
 
   // #ifdef H5
@@ -92,7 +93,17 @@ function setFontSize(level = 'normal') {
   return font
 }
 
+function getThemeVars(themeName = 'mint') {
+  return THEME_VARS[themeName] || THEME_VARS.mint
+}
+
+function getFontConfig(level = 'normal') {
+  return FONT_SIZE_MAP[level] || FONT_SIZE_MAP.normal
+}
+
 export {
   setTheme,
-  setFontSize
+  setFontSize,
+  getThemeVars,
+  getFontConfig
 }

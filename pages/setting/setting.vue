@@ -87,6 +87,7 @@ import {
   TASK_POOL_KEY
 } from '@/utils/storage.js'
 import { deleteMediaFile, formatFileSize, getFileSize } from '@/utils/mediaHelper.js'
+import { setTheme, setFontSize, getThemeVars, getFontConfig } from '@/utils/theme.js'
 
 const APP_SETTINGS_KEY = 'appSettings'
 const USERS_KEY = 'users'
@@ -99,31 +100,12 @@ const DEFAULT_SETTINGS = {
   imageQuality: 'standard'
 }
 
-const THEME_PRESETS = {
-  mint: {
-    '--app-bg-color': '#eefcf8',
-    '--app-nav-bg': '#e8faf4'
-  },
-  warm: {
-    '--app-bg-color': '#fff7eb',
-    '--app-nav-bg': '#ffeccc'
-  },
-  ocean: {
-    '--app-bg-color': '#eaf4ff',
-    '--app-nav-bg': '#dcecff'
-  }
-}
-
-const FONT_SIZE_PRESETS = {
-  small: { h5RootPx: 14, pageRpx: '24rpx' },
-  normal: { h5RootPx: 16, pageRpx: '28rpx' },
-  large: { h5RootPx: 18, pageRpx: '32rpx' }
-}
-
 export default {
   data() {
     return {
       appSettings: { ...DEFAULT_SETTINGS },
+      activeThemeVars: getThemeVars('mint'),
+      activeFontConfig: getFontConfig('normal'),
       cacheSizeBytes: 0,
       cleaning: false,
       versionName: (manifest && manifest.versionName) || '1.0.0',
@@ -160,9 +142,10 @@ export default {
       return formatFileSize(this.cacheSizeBytes)
     },
     pageStyleVars() {
-      const fontPreset = FONT_SIZE_PRESETS[this.appSettings.fontSize] || FONT_SIZE_PRESETS.normal
       return {
-        '--page-font-size': fontPreset.pageRpx
+        ...this.activeThemeVars,
+        '--page-font-size': this.activeFontConfig.varSize,
+        '--font-scale': String(this.activeFontConfig.scale)
       }
     }
   },
@@ -202,32 +185,14 @@ export default {
       app.globalData = app.globalData || {}
       app.globalData.appSettings = merged
 
-      this.applyTheme(merged.theme)
-      this.applyFontSize(merged.fontSize)
+      this.activeThemeVars = setTheme(merged.theme)
+      this.activeFontConfig = setFontSize(merged.fontSize)
+      app.globalData.themeVars = this.activeThemeVars
+      app.globalData.fontConfig = this.activeFontConfig
 
       if (persist) {
         setItem(APP_SETTINGS_KEY, merged)
       }
-    },
-    applyTheme(themeValue) {
-      const theme = THEME_PRESETS[themeValue] || THEME_PRESETS.mint
-
-      // #ifdef H5
-      if (typeof document !== 'undefined' && document.documentElement) {
-        Object.keys(theme).forEach((key) => {
-          document.documentElement.style.setProperty(key, theme[key])
-        })
-      }
-      // #endif
-    },
-    applyFontSize(fontValue) {
-      const fontPreset = FONT_SIZE_PRESETS[fontValue] || FONT_SIZE_PRESETS.normal
-
-      // #ifdef H5
-      if (typeof document !== 'undefined' && document.documentElement) {
-        document.documentElement.style.fontSize = `${fontPreset.h5RootPx}px`
-      }
-      // #endif
     },
     onThemeChange(e) {
       const value = e.detail.value
@@ -462,15 +427,14 @@ export default {
 <style scoped>
 .setting-page {
   min-height: 100vh;
-  background: var(--mint-bg);
+  background: var(--bg-color);
   padding: 24rpx;
   box-sizing: border-box;
   font-size: var(--page-font-size);
 
-  --mint-bg: #eefcf8;
-  --mint-card: #ffffff;
-  --mint-title: #16342f;
-  --mint-sub: #6c9489;
+  --mint-card: var(--card-bg-color);
+  --mint-title: var(--text-color);
+  --mint-sub: var(--text-secondary-color);
   --mint-border: #cdeee2;
   --mint-shadow: 0 10rpx 24rpx rgba(43, 132, 112, 0.12);
   --mint-danger: #e86a70;
@@ -491,7 +455,7 @@ export default {
 
 .group-title {
   display: block;
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   color: var(--mint-title);
   font-weight: 700;
   margin-bottom: 14rpx;
@@ -512,20 +476,20 @@ export default {
 }
 
 .row-label {
-  font-size: 28rpx;
+  font-size: calc(28rpx * var(--font-scale));
   color: var(--mint-title);
 }
 
 .row-desc {
   display: block;
   margin-top: 6rpx;
-  font-size: 22rpx;
+  font-size: calc(22rpx * var(--font-scale));
   color: var(--mint-sub);
 }
 
 .row-value,
 .picker-value {
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale));
   color: var(--mint-sub);
 }
 
@@ -547,7 +511,7 @@ export default {
   line-height: 74rpx;
   margin: 0;
   border-radius: 14rpx;
-  font-size: 26rpx;
+  font-size: calc(26rpx * var(--font-scale));
   color: #2fa184;
   background: #e9faf4;
   border: 2rpx solid var(--mint-border);
@@ -573,7 +537,7 @@ export default {
   border: none;
   color: #ffffff;
   background: var(--mint-danger);
-  font-size: 30rpx;
+  font-size: calc(30rpx * var(--font-scale));
   font-weight: 600;
 }
 

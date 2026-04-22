@@ -7,8 +7,10 @@
           <text class="date-text">{{ displayDateText }}</text>
         </view>
       </picker>
-      <text v-if="!isCurrentDateToday" class="today-btn" @click="backToToday">今日</text>
       <text class="arrow" @click="goNextDay">›</text>
+    </view>
+    <view class="date-tools">
+      <text v-if="!isCurrentDateToday" class="today-btn" @click="backToToday">回到今日</text>
     </view>
 
     <scroll-view class="task-list" scroll-y>
@@ -103,7 +105,7 @@
 </template>
 
 <script>
-import { getTaskPool, getDailyRecord, setDailyRecord, getItem } from '@/utils/storage.js'
+import { getDailyRecord, setDailyRecord, getItem, getTaskPool } from '@/utils/storage.js'
 import { formatDate, getToday, getNextDay, getPrevDay, getWeekday } from '@/utils/dateHelper.js'
 
 const DAILY_KEY_PREFIX = 'dailyRecord_'
@@ -221,21 +223,7 @@ export default {
           .sort((a, b) => a.sortOrder - b.sortOrder)
         return
       }
-
-      const pool = getTaskPool().slice().sort((a, b) => {
-        const sa = Number(a && a.sortOrder ? a.sortOrder : 0)
-        const sb = Number(b && b.sortOrder ? b.sortOrder : 0)
-        return sa - sb
-      })
-
-      if (pool.length === 0) {
-        this.dailyTasks = []
-        return
-      }
-
-      const initialized = pool.map((task, index) => this.sanitizeForDailyFromPool(task, index))
-      this.dailyTasks = initialized
-      setDailyRecord(dateStr, initialized)
+      this.dailyTasks = []
     },
     goPrevDay() {
       this.currentDate = getPrevDay(this.currentDate)
@@ -305,7 +293,7 @@ export default {
       const tomorrow = getNextDay(this.currentDate)
       const nextTasks = this.dailyTasks.map((item, index) => this.sanitizeForTomorrow(item, index))
       setDailyRecord(tomorrow, nextTasks)
-      this.showToast('已同步任务到明天', 'success')
+      this.showToast('已同步到明天', 'success')
     },
     openManageMenu() {
       uni.showActionSheet({
@@ -453,14 +441,22 @@ export default {
 }
 
 .today-btn {
-  margin-right: 10rpx;
-  padding: 0 14rpx;
+  align-self: flex-end;
+  padding: 0 18rpx;
   height: 50rpx;
   line-height: 50rpx;
   border-radius: 12rpx;
   font-size: 24rpx;
   color: var(--mint-primary-2);
   background: #e9f9f3;
+}
+
+.date-tools {
+  min-height: 56rpx;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-bottom: 8rpx;
 }
 
 .task-list {

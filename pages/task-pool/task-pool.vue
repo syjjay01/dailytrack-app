@@ -111,8 +111,10 @@ export default {
       }))
     },
     persistTaskPool(list) {
-      const normalized = this.normalizeTaskList(list).map((item, index) => ({
-        ...item,
+      const source = Array.isArray(list) ? list : []
+      const normalized = source.map((item, index) => ({
+        id: item && item.id ? item.id : `task_${Date.now()}_${index}`,
+        name: item && item.name ? item.name : '',
         sortOrder: index + 1
       }))
       this.taskPool = normalized
