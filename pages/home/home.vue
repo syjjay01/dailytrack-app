@@ -40,8 +40,16 @@
               >
                 ≡
               </text>
-              <text class="status-tag" :class="statusClass(task.status)">{{ statusLabel(task.status) }}</text>
-              <text class="status-btn" @click.stop="toggleTaskStatus(task)">•••</text>
+              <view
+                class="status-tag clickable"
+                :class="statusClass(task.status)"
+                hover-class="status-tag-active"
+                :hover-stay-time="90"
+                @click.stop="toggleTaskStatus(task)"
+              >
+                <text class="status-icon">{{ statusIcon(task.status) }}</text>
+                <text class="status-label">{{ statusLabel(task.status) }}</text>
+              </view>
             </view>
           </view>
 
@@ -131,7 +139,9 @@ export default {
         index: -1,
         startY: 0,
         itemHeight: 120,
-        taskId: ''
+        taskId: '',
+        startedAt: 0,
+        lastEndAt: 0
       }
     }
   },
@@ -153,12 +163,24 @@ export default {
     }
   },
   onShow() {
+    this.resetDragState()
     this.loadAppAppearance()
     this.loadDailyTasks(this.currentDate)
   },
   methods: {
     showToast(title, icon = 'none') {
       uni.showToast({ title, icon, duration: 1800 })
+    },
+    resetDragState() {
+      this.dragState = {
+        active: false,
+        index: -1,
+        startY: 0,
+        itemHeight: 120,
+        taskId: '',
+        startedAt: 0,
+        lastEndAt: Date.now()
+      }
     },
     loadAppAppearance() {
       const app = getApp()
@@ -181,6 +203,11 @@ export default {
       if (status === 'in_progress') return 'progress'
       if (status === 'completed') return 'done'
       return 'default'
+    },
+    statusIcon(status) {
+      if (status === 'in_progress') return '◔'
+      if (status === 'completed') return '✓'
+      return '○'
     },
     normalizeTask(raw, index = 0) {
       const images = Array.isArray(raw && raw.images)
@@ -288,7 +315,17 @@ export default {
       return task.video || ''
     },
     goDetail(task) {
-      if (this.dragState.active) return
+      const now = Date.now()
+      if (this.dragState.active) {
+        const dragElapsed = now - Number(this.dragState.startedAt || 0)
+        // 兜底：异常残留的拖拽状态超过 1.5s 后自动清理，避免卡住点击。
+        if (dragElapsed > 1500) {
+          this.resetDragState()
+        } else {
+          return
+        }
+      }
+      if (now - Number(this.dragState.lastEndAt || 0) < 220) return
       uni.navigateTo({
         url: `/pages/checkin-detail/checkin-detail?date=${this.currentDate}&taskId=${task.id}`
       })
@@ -413,7 +450,9 @@ export default {
           index,
           startY: this.getPointY(event),
           itemHeight: height || 120,
-          taskId: this.dailyTasks[index] ? this.dailyTasks[index].id : ''
+          taskId: this.dailyTasks[index] ? this.dailyTasks[index].id : '',
+          startedAt: Date.now(),
+          lastEndAt: Number(this.dragState.lastEndAt || 0)
         }
       })
     },
@@ -438,13 +477,7 @@ export default {
     endDrag() {
       if (!this.dragState.active) return
       this.saveCurrentDateTasks()
-      this.dragState = {
-        active: false,
-        index: -1,
-        startY: 0,
-        itemHeight: 120,
-        taskId: ''
-      }
+      this.resetDragState()
     }
   }
 }
@@ -509,7 +542,7 @@ export default {
 .date-tools {
   min-height: 56rpx;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
   margin-bottom: 8rpx;
 }
@@ -529,6 +562,7 @@ export default {
 }
 
 .sort-tip {
+  margin-left: auto;
   color: var(--mint-sub);
 }
 
@@ -599,32 +633,50 @@ export default {
   font-size: calc(22rpx * var(--font-scale));
   border-radius: 999rpx;
   padding: 8rpx 16rpx;
+  border: 2rpx solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+}
+
+.status-tag.clickable {
+  min-width: 150rpx;
+  text-align: center;
 }
 
 .status-tag.default {
   background: #f3f7f6;
   color: #6f8d84;
+  border-color: #dbe7e3;
 }
 
 .status-tag.progress {
   background: #fff5df;
   color: #b8801d;
+  border-color: #f6deab;
 }
 
 .status-tag.done {
   background: #e8f8ed;
   color: #2f8f4c;
+  border-color: #bfe5c9;
 }
 
-.status-btn {
-  width: 50rpx;
-  height: 50rpx;
-  line-height: 44rpx;
-  text-align: center;
-  font-size: 26rpx;
-  color: #6f8d84;
-  border-radius: 14rpx;
-  background: #eff7f4;
+.status-icon {
+  font-size: calc(22rpx * var(--font-scale));
+  font-weight: 700;
+  line-height: 1;
+}
+
+.status-label {
+  font-size: calc(22rpx * var(--font-scale));
+  font-weight: 600;
+}
+
+.status-tag-active {
+  transform: translateY(1rpx) scale(0.97);
+  opacity: 0.9;
 }
 
 .preview-row {
@@ -797,7 +849,6 @@ export default {
   }
 
   .arrow,
-  .status-btn,
   .today-btn,
   .drag-handle {
     background: #1e443b;
