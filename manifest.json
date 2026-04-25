@@ -1,5 +1,5 @@
 {
-    "name" : "日迹打卡",
+    "name" : "日迹圈",
     "appid" : "__UNI__A6A9E52",
     "description" : "轻量级、隐私优先的个人任务与习惯记录工具",
     "versionName" : "1.0.0",
@@ -17,7 +17,9 @@
         },
         "modules" : {
             "VideoPlayer" : {},
-            "Camera" : {}
+            "Camera" : {},
+            "Record" : {},
+            "Speech" : {}
         },
         "distribute" : {
             "android" : {
@@ -43,7 +45,14 @@
                 "dSYMs" : false
             },
             "sdkConfigs" : {
-                "statics" : {}
+                "statics" : {},
+                "speech" : {
+                    "baidu" : {
+                        "appid" : "123031120",
+                        "apikey" : "vUuM5nyIgjTIp8JPpBgNXNrM",
+                        "secretkey" : "WNvQxKpZEEua3QrYRTvQGTu6RLWlquSB"
+                    }
+                }
             },
             "icons" : {
                 "android" : {
@@ -76,6 +85,9 @@
                         "spotlight@3x" : "unpackage/res/icons/120x120.png"
                     }
                 }
+            },
+            "splashscreen" : {
+                "androidStyle" : "common"
             }
         }
     },

@@ -25,6 +25,12 @@
       }
     },
     {
+      "path": "pages/video-player/video-player",
+      "style": {
+        "navigationBarTitleText": "视频播放"
+      }
+    },
+    {
       "path": "pages/setting/setting",
       "style": {
         "navigationBarTitleText": "我的"

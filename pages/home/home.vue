@@ -10,9 +10,25 @@
       <text class="arrow" @click="goNextDay">›</text>
     </view>
 
+    <view class="stats-card">
+      <view class="stats-inner">
+        <view
+          v-if="taskStats.total > 0"
+          class="progress-ring"
+          :style="{ '--progress-deg': `${taskStats.rate * 3.6}deg` }"
+        >
+          <view class="progress-core">{{ taskStats.rate }}%</view>
+        </view>
+        <text class="stats-text">
+          今日共 {{ taskStats.total }} 个任务，已完成 {{ taskStats.completed }} 个。
+          {{ taskStats.message }} {{ taskStats.emoji }}{{ taskStats.stars ? ` ${taskStats.stars}` : '' }}
+        </text>
+      </view>
+    </view>
+
     <view class="date-tools">
-      <text v-if="!isCurrentDateToday" class="today-btn" @click="backToToday">回到今日</text>
       <text v-if="dailyTasks.length > 1" class="sort-tip">长按 ≡ 拖拽排序</text>
+      <text v-if="!isCurrentDateToday" class="today-btn" @click="backToToday">回到今日</text>
     </view>
 
     <scroll-view class="task-list" scroll-y>
@@ -25,11 +41,25 @@
           v-for="(task, index) in dailyTasks"
           :key="task.id"
           class="task-card"
-          :class="{ dragging: dragState.active && dragState.taskId === task.id }"
+          :class="{
+            dragging: dragState.active && dragState.taskId === task.id,
+            danger: deleteArmedTaskId === String(task.id)
+          }"
           @click="goDetail(task)"
+          @longpress="armTaskDelete(task)"
         >
+          <text
+            v-if="deleteArmedTaskId === String(task.id)"
+            class="task-delete-x"
+            @click.stop="confirmDeleteTaskFromCard(task)"
+          >
+            ×
+          </text>
           <view class="task-head">
-            <text class="task-name">{{ task.name }}</text>
+            <view class="task-name-wrap">
+              <text class="task-edit-icon" @click.stop="editTaskTitle(task)">✎</text>
+              <text class="task-name">{{ task.name }}</text>
+            </view>
             <view class="status-wrap">
               <text
                 class="drag-handle"
@@ -116,12 +146,12 @@
 </template>
 
 <script>
-import { getDailyRecord, setDailyRecord, getItem, getTaskPool } from '@/utils/storage.js'
+import { getDailyRecord, setDailyRecord, getTaskPool, setItem } from '@/utils/storage.js'
 import { formatDate, getToday, getNextDay, getPrevDay, getWeekday } from '@/utils/dateHelper.js'
 import { getThemeVars, getFontConfig, applyNavigationBarTheme, applyTabBarTheme } from '@/utils/theme.js'
 
-const DAILY_KEY_PREFIX = 'dailyRecord_'
 const STATUS_FLOW = ['not_started', 'in_progress', 'completed']
+const EDITING_TASK_SNAPSHOT_KEY = 'editingTaskSnapshot'
 
 export default {
   data() {
@@ -134,6 +164,7 @@ export default {
       poolPickerVisible: false,
       availablePoolTasks: [],
       poolSelectedIds: [],
+      deleteArmedTaskId: '',
       dragState: {
         active: false,
         index: -1,
@@ -159,6 +190,53 @@ export default {
         ...this.activeThemeVars,
         '--page-font-size': this.activeFontConfig.varSize,
         '--font-scale': String(this.activeFontConfig.scale)
+      }
+    },
+    taskStats() {
+      const total = this.dailyTasks.length
+      const completed = this.dailyTasks.filter((item) => item && item.status === 'completed').length
+      const rate = total > 0 ? Math.round((completed / total) * 100) : 0
+
+      if (total === 0) {
+        return {
+          total: 0,
+          completed: 0,
+          rate: 0,
+          message: '轻松开个头吧',
+          emoji: '🌱',
+          stars: ''
+        }
+      }
+
+      if (rate >= 90) {
+        return {
+          total,
+          completed,
+          rate,
+          message: '你太棒啦',
+          emoji: '🏆',
+          stars: '★★★★★'
+        }
+      }
+
+      if (rate >= 70) {
+        return {
+          total,
+          completed,
+          rate,
+          message: '真不错哦',
+          emoji: '😄',
+          stars: '★★★★'
+        }
+      }
+
+      return {
+        total,
+        completed,
+        rate,
+        message: '继续加油哦',
+        emoji: '💪',
+        stars: '★★★'
       }
     }
   },
@@ -191,9 +269,6 @@ export default {
       applyNavigationBarTheme(activeTheme)
       applyTabBarTheme(activeTheme)
     },
-    getDailyStorageKey(dateStr) {
-      return `${DAILY_KEY_PREFIX}${dateStr}`
-    },
     statusLabel(status) {
       if (status === 'in_progress') return '进行中'
       if (status === 'completed') return '已完成'
@@ -210,19 +285,61 @@ export default {
       return '○'
     },
     normalizeTask(raw, index = 0) {
-      const images = Array.isArray(raw && raw.images)
-        ? raw.images
-        : Array.isArray(raw && raw.checkinImages)
-          ? raw.checkinImages
-          : []
+      const source = raw && typeof raw === 'object' ? raw : {}
+      const checkin = source.checkin && typeof source.checkin === 'object' ? source.checkin : {}
+      let images = []
+      if (Array.isArray(raw && raw.images)) {
+        images = raw.images
+      } else if (Array.isArray(raw && raw.checkinImages)) {
+        images = raw.checkinImages
+      } else if (Array.isArray(raw && raw.mediaImages)) {
+        images = raw.mediaImages
+      } else if (Array.isArray(source.media && source.media.images)) {
+        images = source.media.images
+      } else if (Array.isArray(checkin.images)) {
+        images = checkin.images
+      }
+      const checkinText =
+        (raw && (raw.checkinText || raw.text || raw.content || raw.checkinContent || raw.checkin_content || raw.note || raw.remark)) ||
+        checkin.text ||
+        checkin.content ||
+        ''
+      const videoPath =
+        (raw && (raw.video || raw.videoPath || raw.mediaVideoPath || raw.mediaVideo || raw.recordVideoPath)) ||
+        (source.media && source.media.video) ||
+        checkin.video ||
+        ''
+      const audioPath =
+        (raw && (raw.audioPath || raw.audio || raw.recordPath || raw.voicePath || raw.voice)) ||
+        (source.media && source.media.audio) ||
+        checkin.audio ||
+        ''
       return {
+        ...source,
         id: raw && raw.id ? raw.id : `daily_${Date.now()}_${index}`,
         name: raw && raw.name ? raw.name : '未命名任务',
         sortOrder: Number(raw && raw.sortOrder ? raw.sortOrder : index + 1),
         status: raw && raw.status ? raw.status : 'not_started',
-        checkinText: raw && (raw.checkinText || raw.text || raw.content) ? (raw.checkinText || raw.text || raw.content) : '',
+        checkinText,
+        text: checkinText,
+        content: checkinText,
         images,
-        video: raw && (raw.video || raw.videoPath) ? (raw.video || raw.videoPath) : ''
+        checkinImages: images,
+        video: videoPath,
+        videoPath,
+        videoDuration: Number((raw && raw.videoDuration) || (raw && raw.video_duration) || checkin.videoDuration || 0),
+        audioPath,
+        audioDuration: Number((raw && raw.audioDuration) || (raw && raw.audio_duration) || checkin.audioDuration || 0),
+        checkin: {
+          ...checkin,
+          text: checkinText,
+          content: checkinText,
+          images,
+          video: videoPath,
+          audio: audioPath,
+          videoDuration: Number((raw && raw.videoDuration) || (raw && raw.video_duration) || checkin.videoDuration || 0),
+          audioDuration: Number((raw && raw.audioDuration) || (raw && raw.audio_duration) || checkin.audioDuration || 0)
+        }
       }
     },
     sanitizeForDailyFromPool(task, index) {
@@ -256,14 +373,6 @@ export default {
       setDailyRecord(this.currentDate, normalized)
     },
     loadDailyTasks(dateStr) {
-      const storageValue = getItem(this.getDailyStorageKey(dateStr))
-      if (Array.isArray(storageValue)) {
-        this.dailyTasks = storageValue
-          .map((item, index) => this.normalizeTask(item, index))
-          .sort((a, b) => a.sortOrder - b.sortOrder)
-        return
-      }
-
       const existing = getDailyRecord(dateStr)
       if (Array.isArray(existing) && existing.length > 0) {
         this.dailyTasks = existing
@@ -293,6 +402,7 @@ export default {
       this.loadDailyTasks(this.currentDate)
     },
     toggleTaskStatus(task) {
+      this.deleteArmedTaskId = ''
       if (this.dragState.active) return
       const idx = this.dailyTasks.findIndex((item) => item.id === task.id)
       if (idx < 0) return
@@ -315,6 +425,10 @@ export default {
       return task.video || ''
     },
     goDetail(task) {
+      if (this.deleteArmedTaskId) {
+        this.deleteArmedTaskId = ''
+        return
+      }
       const now = Date.now()
       if (this.dragState.active) {
         const dragElapsed = now - Number(this.dragState.startedAt || 0)
@@ -326,6 +440,12 @@ export default {
         }
       }
       if (now - Number(this.dragState.lastEndAt || 0) < 220) return
+      setItem(EDITING_TASK_SNAPSHOT_KEY, {
+        date: this.currentDate,
+        taskId: task && task.id ? String(task.id) : '',
+        task: task || null,
+        savedAt: Date.now()
+      })
       uni.navigateTo({
         url: `/pages/checkin-detail/checkin-detail?date=${this.currentDate}&taskId=${task.id}`
       })
@@ -346,6 +466,7 @@ export default {
       this.showToast('已同步到明天', 'success')
     },
     openManageMenu() {
+      this.deleteArmedTaskId = ''
       uni.showActionSheet({
         itemList: ['从任务池添加任务', '编辑当天任务列表'],
         success: (res) => {
@@ -377,6 +498,7 @@ export default {
       this.poolSelectedIds = (e && e.detail && e.detail.value) || []
     },
     addSelectedFromPool() {
+      this.deleteArmedTaskId = ''
       if (this.poolSelectedIds.length === 0) {
         this.showToast('请先选择任务')
         return
@@ -402,6 +524,7 @@ export default {
       }
     },
     deleteTodayTask(task) {
+      this.deleteArmedTaskId = ''
       uni.showModal({
         title: '删除当天任务',
         content: `确定删除「${task.name}」吗？`,
@@ -443,6 +566,7 @@ export default {
       return next
     },
     startDrag(index, event) {
+      this.deleteArmedTaskId = ''
       if (this.dailyTasks.length <= 1) return
       this.measureTaskCardHeight((height) => {
         this.dragState = {
@@ -478,6 +602,59 @@ export default {
       if (!this.dragState.active) return
       this.saveCurrentDateTasks()
       this.resetDragState()
+    },
+    armTaskDelete(task) {
+      if (!task || task.id === undefined || task.id === null) return
+      if (this.dragState.active) return
+      this.deleteArmedTaskId = String(task.id)
+    },
+    confirmDeleteTaskFromCard(task) {
+      if (!task) return
+      uni.showModal({
+        title: '删除当天任务',
+        content: `确定删除「${task.name || '该任务'}」吗？`,
+        confirmText: '删除',
+        success: (res) => {
+          if (!res.confirm) return
+          this.dailyTasks = this.dailyTasks
+            .filter((item) => String(item.id) !== String(task.id))
+            .map((item, index) => ({ ...item, sortOrder: index + 1 }))
+          this.deleteArmedTaskId = ''
+          this.saveCurrentDateTasks()
+          this.showToast('已删除', 'success')
+        }
+      })
+    },
+    editTaskTitle(task) {
+      if (!task) return
+      uni.showModal({
+        title: '修改任务标题',
+        editable: true,
+        placeholderText: '请输入任务标题（最多20字）',
+        content: String(task.name || ''),
+        confirmText: '保存',
+        success: (res) => {
+          if (!res.confirm) return
+          const nextName = String((res && res.content) || '').trim()
+          if (!nextName) {
+            this.showToast('标题不能为空')
+            return
+          }
+          if (nextName.length > 20) {
+            this.showToast('标题最多20字')
+            return
+          }
+          const idx = this.dailyTasks.findIndex((item) => String(item.id) === String(task.id))
+          if (idx < 0) return
+          this.dailyTasks[idx] = {
+            ...this.dailyTasks[idx],
+            name: nextName
+          }
+          this.deleteArmedTaskId = ''
+          this.saveCurrentDateTasks()
+          this.showToast('已更新标题', 'success')
+        }
+      })
     }
   }
 }
@@ -553,6 +730,7 @@ export default {
 }
 
 .today-btn {
+  margin-left: auto;
   padding: 0 18rpx;
   height: 50rpx;
   line-height: 50rpx;
@@ -562,12 +740,61 @@ export default {
 }
 
 .sort-tip {
-  margin-left: auto;
   color: var(--mint-sub);
 }
 
+.stats-card {
+  margin-bottom: 14rpx;
+  background: var(--mint-card);
+  border: 2rpx solid var(--mint-border);
+  border-radius: 18rpx;
+  box-shadow: var(--mint-shadow);
+  padding: 14rpx 18rpx;
+}
+
+.stats-inner {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.progress-ring {
+  width: 88rpx;
+  height: 88rpx;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--mint-primary) 0deg var(--progress-deg),
+    #dfeee8 var(--progress-deg) 360deg
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.progress-core {
+  width: 66rpx;
+  height: 66rpx;
+  border-radius: 50%;
+  background: var(--mint-card);
+  color: var(--mint-title);
+  font-size: calc(20rpx * var(--font-scale));
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stats-text {
+  display: block;
+  flex: 1;
+  font-size: calc(24rpx * var(--font-scale));
+  color: var(--mint-sub);
+  line-height: 1.5;
+}
+
 .task-list {
-  max-height: calc(100vh - 360rpx);
+  max-height: calc(100vh - 430rpx);
 }
 
 .empty-wrap {
@@ -581,6 +808,7 @@ export default {
 }
 
 .task-card {
+  position: relative;
   background: var(--mint-card);
   border: 2rpx solid var(--mint-border);
   border-radius: 24rpx;
@@ -596,11 +824,51 @@ export default {
   box-shadow: 0 18rpx 34rpx rgba(43, 132, 112, 0.22);
 }
 
+.task-card.danger {
+  border-color: #f0c8cb;
+}
+
 .task-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
+}
+
+.task-delete-x {
+  position: absolute;
+  top: 10rpx;
+  right: 10rpx;
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  text-align: center;
+  border-radius: 999rpx;
+  background: #ffffff;
+  border: 2rpx solid #f3d5d8;
+  color: #db6d76;
+  font-size: calc(30rpx * var(--font-scale));
+  z-index: 2;
+}
+
+.task-name-wrap {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.task-edit-icon {
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  text-align: center;
+  border-radius: 10rpx;
+  font-size: calc(24rpx * var(--font-scale));
+  color: var(--mint-primary-2);
+  background: #edf8f4;
+  flex-shrink: 0;
 }
 
 .task-name {
@@ -619,20 +887,20 @@ export default {
 }
 
 .drag-handle {
-  width: 52rpx;
-  height: 52rpx;
-  line-height: 48rpx;
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
   text-align: center;
   border-radius: 14rpx;
   background: #edf8f4;
   color: var(--mint-primary-2);
-  font-size: 30rpx;
+  font-size: 34rpx;
 }
 
 .status-tag {
   font-size: calc(22rpx * var(--font-scale));
   border-radius: 999rpx;
-  padding: 8rpx 16rpx;
+  padding: 10rpx 16rpx;
   border: 2rpx solid transparent;
   display: flex;
   align-items: center;
@@ -641,7 +909,8 @@ export default {
 }
 
 .status-tag.clickable {
-  min-width: 150rpx;
+  min-width: 158rpx;
+  min-height: 56rpx;
   text-align: center;
 }
 
@@ -680,11 +949,11 @@ export default {
 }
 
 .preview-row {
-  margin-top: 16rpx;
+  margin-top: 14rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16rpx;
+  gap: 14rpx;
 }
 
 .preview-text {
@@ -696,9 +965,9 @@ export default {
 
 .preview-image,
 .video-thumb {
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 14rpx;
+  width: 84rpx;
+  height: 84rpx;
+  border-radius: 12rpx;
   flex-shrink: 0;
 }
 

@@ -1,5 +1,5 @@
 ﻿<script>
-import { getItem, setItem, getDailyRecord, setDailyRecord } from '@/utils/storage.js'
+import { getItem, setItem, getDailyRecord, setDailyRecord, getDailyRecordKey, getCurrentUsername } from '@/utils/storage.js'
 import { getToday, getPrevDay } from '@/utils/dateHelper.js'
 import {
   setTheme,
@@ -11,13 +11,13 @@ import {
 } from '@/utils/theme.js'
 
 const APP_SETTINGS_KEY = 'appSettings'
-const AUTO_SYNC_LAST_RUN_KEY = 'autoSyncLastRunDate'
-const DAILY_KEY_PREFIX = 'dailyRecord_'
+const AUTO_SYNC_LAST_RUN_PREFIX = 'autoSyncLastRunDate__'
 
 let hasThemeChangeListener = false
 
-function getDailyKey(dateStr) {
-  return `${DAILY_KEY_PREFIX}${dateStr}`
+function getAutoSyncLastRunKey() {
+  const username = getCurrentUsername() || 'default'
+  return `${AUTO_SYNC_LAST_RUN_PREFIX}${username}`
 }
 
 function sanitizeTaskForToday(task, index) {
@@ -88,22 +88,23 @@ export default {
       }
 
       const today = getToday()
-      const lastRunDate = getItem(AUTO_SYNC_LAST_RUN_KEY)
+      const lastRunKey = getAutoSyncLastRunKey()
+      const lastRunDate = getItem(lastRunKey)
       if (lastRunDate === today) {
         return
       }
 
       // 今天已初始化（包括空数组）时不自动覆盖。
-      const todayRaw = getItem(getDailyKey(today))
+      const todayRaw = getItem(getDailyRecordKey(today))
       if (Array.isArray(todayRaw)) {
-        setItem(AUTO_SYNC_LAST_RUN_KEY, today)
+        setItem(lastRunKey, today)
         return
       }
 
       const yesterday = getPrevDay(today)
       const yesterdayTasks = getDailyRecord(yesterday)
       if (!Array.isArray(yesterdayTasks) || yesterdayTasks.length === 0) {
-        setItem(AUTO_SYNC_LAST_RUN_KEY, today)
+        setItem(lastRunKey, today)
         return
       }
 
@@ -113,7 +114,7 @@ export default {
         .map((task, index) => sanitizeTaskForToday(task, index))
 
       setDailyRecord(today, copiedTasks)
-      setItem(AUTO_SYNC_LAST_RUN_KEY, today)
+      setItem(lastRunKey, today)
     }
   }
 }

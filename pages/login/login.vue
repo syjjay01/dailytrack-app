@@ -5,7 +5,7 @@
 
     <view class="panel">
       <view class="brand">
-        <text class="brand-title">日迹打卡</text>
+        <text class="brand-title">日迹圈</text>
         <text class="brand-subtitle">轻量记录每一天</text>
       </view>
 
@@ -91,7 +91,7 @@
 </template>
 
 <script>
-import { getAllUsers, saveUser, setCurrentUser } from '@/utils/storage.js'
+import { getAllUsers, saveUser, setCurrentUser, getCurrentUser } from '@/utils/storage.js'
 
 const USERNAME_REG = /^[A-Za-z0-9_]{3,20}$/
 
@@ -108,6 +108,18 @@ export default {
         password: '',
         confirmPassword: ''
       }
+    }
+  },
+  onShow() {
+    const currentUser = getCurrentUser()
+    if (!currentUser || !currentUser.username) {
+      return
+    }
+    const exists = this.findUser(currentUser.username)
+    if (exists) {
+      uni.switchTab({
+        url: '/pages/home/home'
+      })
     }
   },
   methods: {
@@ -180,6 +192,8 @@ export default {
       const user = this.findUser(username)
       if (!user) {
         this.showToast('用户不存在，请先注册')
+        this.switchTab('register')
+        this.registerForm.username = username
         return
       }
 

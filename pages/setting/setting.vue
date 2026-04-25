@@ -63,6 +63,11 @@
 
       <view class="group-card">
         <text class="group-title">账号</text>
+        <view class="row">
+          <text class="row-label">当前登录</text>
+          <text class="row-value">{{ currentUsername || '未登录' }}</text>
+        </view>
+        <button class="logout-secondary-btn" @click="confirmSignOut">退出登录</button>
         <button class="logout-btn" @click="confirmLogout">注销账号</button>
       </view>
 
@@ -83,7 +88,9 @@ import {
   removeItem,
   getAllUsers,
   getCurrentUser,
-  TASK_POOL_KEY
+  TASK_POOL_KEY,
+  clearCurrentUserSession,
+  removeUserData
 } from '@/utils/storage.js'
 import { deleteMediaFile, formatFileSize, getFileSize } from '@/utils/mediaHelper.js'
 import {
@@ -99,7 +106,6 @@ import {
 
 const APP_SETTINGS_KEY = 'appSettings'
 const USERS_KEY = 'users'
-const CURRENT_USER_KEY = 'currentUser'
 
 const DEFAULT_SETTINGS = {
   theme: 'mint',
@@ -112,6 +118,7 @@ export default {
   data() {
     return {
       appSettings: { ...DEFAULT_SETTINGS },
+      currentUsername: '',
       activeThemeVars: getThemeVars('mint'),
       activeFontConfig: getFontConfig('normal'),
       cacheSizeBytes: 0,
@@ -158,12 +165,17 @@ export default {
     }
   },
   onShow() {
+    this.loadCurrentUser()
     this.loadSettings()
     this.refreshCacheSize()
   },
   methods: {
     showToast(title, icon = 'none') {
       uni.showToast({ title, icon, duration: 1800 })
+    },
+    loadCurrentUser() {
+      const currentUser = getCurrentUser()
+      this.currentUsername = currentUser && currentUser.username ? String(currentUser.username) : ''
     },
     loadSettings() {
       const local = getItem(APP_SETTINGS_KEY)
@@ -252,6 +264,11 @@ export default {
           const videoPath = (task && (task.video || task.videoPath)) || ''
           if (videoPath) {
             refs.add(this.normalizePath(videoPath))
+          }
+
+          const audioPath = (task && task.audioPath) || ''
+          if (audioPath) {
+            refs.add(this.normalizePath(audioPath))
           }
         })
       })
@@ -396,6 +413,27 @@ export default {
         }
       })
     },
+    confirmSignOut() {
+      uni.showModal({
+        title: '退出登录',
+        content: '退出后可重新登录其他账号，当前账号数据会保留在本机。',
+        confirmText: '退出',
+        success: (res) => {
+          if (res.confirm) {
+            this.signOut()
+          }
+        }
+      })
+    },
+    signOut() {
+      clearCurrentUserSession()
+      this.showToast('已退出登录', 'success')
+      setTimeout(() => {
+        uni.reLaunch({
+          url: '/pages/login/login'
+        })
+      }, 250)
+    },
     async logoutAccount() {
       uni.showLoading({ title: '正在注销...' })
       try {
@@ -409,7 +447,11 @@ export default {
         })
 
         setItem(USERS_KEY, nextUsers)
-        removeItem(TASK_POOL_KEY)
+        if (currentUser && currentUser.username) {
+          removeUserData(currentUser.username)
+        } else {
+          removeItem(TASK_POOL_KEY)
+        }
         removeItem(APP_SETTINGS_KEY)
 
         const dailyKeys = this.getDailyStorageKeys()
@@ -420,7 +462,7 @@ export default {
           await deleteMediaFile(mediaFiles[i].path)
         }
 
-        removeItem(CURRENT_USER_KEY)
+        clearCurrentUserSession()
 
         const app = getApp()
         app.globalData = app.globalData || {}
@@ -547,6 +589,7 @@ export default {
 }
 
 .logout-btn {
+  margin-top: 12rpx;
   height: 84rpx;
   line-height: 84rpx;
   border-radius: 14rpx;
@@ -555,6 +598,21 @@ export default {
   background: var(--mint-danger);
   font-size: calc(30rpx * var(--font-scale));
   font-weight: 600;
+}
+
+.logout-secondary-btn {
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 14rpx;
+  border: 2rpx solid var(--mint-border);
+  color: var(--mint-title);
+  background: #f0f6f4;
+  font-size: calc(30rpx * var(--font-scale));
+  font-weight: 600;
+}
+
+.logout-secondary-btn::after {
+  border: none;
 }
 
 .logout-btn::after {
@@ -574,6 +632,11 @@ export default {
   .picker-row,
   .action-btn {
     background: #1d433a;
+  }
+
+  .logout-secondary-btn {
+    background: #1d433a;
+    color: var(--mint-title);
   }
 }
 </style>
